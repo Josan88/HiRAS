@@ -1,0 +1,373 @@
+{
+  "repository": "hypothetical-TinyKAN-HAR-paper-to-code",
+  "paper": "TinyKAN-HAR: Explainable Kolmogorov-Arnold Networks for Zero-Shot HAR on TinyML",
+  "paper_reference": "MDPI Sensors 2026, TinyKAN-HAR",
+  "evaluation_date": "2026-05-13",
+  "overall_scores": {
+    "correctness": 3,
+    "completeness": 3,
+    "reproducibility": 2,
+    "code_quality": 3,
+    "documentation": 3,
+    "total_score": 3
+  },
+  "detailed_critique": {
+    "1_model_architecture": {
+      "score": 3,
+      "max": 5,
+      "findings": [
+        {
+          "file": "kan_layer.py",
+          "issue": "Partially correct",
+          "severity": "medium",
+          "description": "The KAN layer implements linear mixing W*x+b followed by univariate spline functions phi(u). The spline representation as linear combination of B-spline basis functions (Equation 13 in paper) is correctly implemented with coefficient theta matrix. However, the spline basis function type is not explicitly specified -- the paper uses cubic B-splines but the code uses generic 'b-spline' without clarifying knot sequence or boundary handling.",
+          "paper_equation": "13",
+          "verification": "Matches Equation 14 in paper: x_j^(l) = sum_k theta_j,k^(l) * B_k^(l)(u_j^(l))"
+        },
+        {
+          "file": "kan_layer.py",
+          "issue": "Missing smoothness regularization",
+          "severity": "high",
+          "description": "The paper specifies discrete second-difference smoothness penalty Omega_j^(l) on spline coefficients (Equation 21). This regularization is missing from the implementation, resulting in less interpretable/unstable spline functions compared to paper claims.",
+          "paper_equation": "21",
+          "verification": "Not found in codebase"
+        },
+        {
+          "file": "model.py",
+          "issue": "KAN depth and latent dimension differ from optimal",
+          "severity": "low",
+          "description": "Paper specifies L=3 layers and d_L=128 as optimal configuration. The model.py uses L=2 and d_L=64 by default. While this reduces parameters and may be intentional for extreme TinyML, it deviates from the paper's validated configuration.",
+          "paper_equation": "15",
+          "verification": "Mismatch with ablation Table 7"
+        }
+      ]
+    },
+    "2_zero_shot_learning_module": {
+      "score": 2,
+      "max": 5,
+      "findings": [
+        {
+          "file": "zsl_module.py",
+          "issue": "Semantic embedding generation incomplete",
+          "severity": "high",
+          "description": "The paper uses both attribute-based and text-embedding-based semantic representations (Section 3.4.1, Equation 26). The implementation only supports simple random/synthetic embeddings for seen classes, not actual text embeddings from pretrained models as specified. This means the ZSL module cannot replicate the paper's >96% accuracy on unseen classes.",
+          "paper_equation": "26",
+          "verification": "s_y = f_sem(y) not implemented; code uses Gaussian random vectors"
+        },
+        {
+          "file": "zsl_module.py",
+          "issue": "Cosine similarity compatibility function correct",
+          "severity": "none",
+          "description": "The compatibility function g_phi(z, s_y) = cos(h, s_y) from Equation 31 is correctly implemented. The semantic projection h = W_sem * z and score calibration for gZSL (Equation 40) are correctly present.",
+          "paper_equation": "31, 40",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "zsl_module.py",
+          "issue": "Alignment loss incorrect",
+          "severity": "high",
+          "description": "The alignment loss L_align (Equation 30) is implemented as mean squared error between projected features and semantic embeddings. However, the loss is incorrectly applied to raw logits instead of the projected semantic representation h. The L2 squared error uses g_phi outputs directly rather than h = W_sem*z, breaking the semantic alignment objective.",
+          "paper_equation": "30",
+          "verification": "Code uses cross-entropy on logits, not MSE on semantic projection"
+        },
+        {
+          "file": "zsl_module.py",
+          "issue": "Semantic softmax temperature tau missing",
+          "severity": "medium",
+          "description": "Equation 34 in paper uses temperature parameter tau to sharpen/soften the softmax distribution over compatibility scores. This hyperparameter is not exposed as a configurable parameter in the implementation, defaulting to tau=1 without justification.",
+          "paper_equation": "34",
+          "verification": "tau parameter hardcoded"
+        }
+      ]
+    },
+    "3_explainability_framework": {
+      "score": 2,
+      "max": 5,
+      "findings": [
+        {
+          "file": "explainability.py",
+          "issue": "Gradient-based attribution implemented but gradient x input missing",
+          "severity": "medium",
+          "description": "The paper specifies gradient * input scheme for local explanations (Section 3.5.1), where gradients are multiplied by normalized input values to down-weight negligible features. The implementation computes raw gradients only, missing the input multiplication.",
+          "paper_equation": "Section 3.5.1",
+          "verification": "Only torch.autograd.grad used, no input weighting"
+        },
+        {
+          "file": "explainability.py",
+          "issue": "SHAP-style global importance not implemented",
+          "severity": "high",
+          "description": "Section 3.5.4 describes SHAP-style global feature importance computation using sampling-based Shapley value approximation. This entire component is missing from the codebase, leaving only local gradient attributions.",
+          "paper_equation": "Section 3.5.4",
+          "verification": "Not found in codebase"
+        },
+        {
+          "file": "explainability.py",
+          "issue": "Univariate spline visualization partial",
+          "severity": "low",
+          "description": "The paper specifies visualization of learned spline functions phi_j^(l)(u) to show how neurons warp intermediate features (Section 3.5.5). A plotting function exists but does not compute derivatives or class-wise activation profiles as described in the paper's Figure 4.",
+          "paper_equation": "Section 3.5.5",
+          "verification": "Partial implementation; missing derivative plots and class-wise activations"
+        },
+        {
+          "file": "explainability.py",
+          "issue": "Sensor-level and temporal aggregation correct",
+          "severity": "none",
+          "description": "Sections 3.5.2 and 3.5.3 correctly implement aggregation of attributions over time (sensor-level) and over sensors (temporal), matching the paper's descriptions.",
+          "paper_equation": "Sections 3.5.2, 3.5.3",
+          "verification": "Correctly implemented"
+        }
+      ]
+    },
+    "4_preprocessing_pipeline": {
+      "score": 3,
+      "max": 5,
+      "findings": [
+        {
+          "file": "preprocessing.py",
+          "issue": "Gravity separation correctly implemented",
+          "severity": "none",
+          "description": "The low-pass filtering approach for separating gravity component from body acceleration (Equations 4-5) is correctly implemented using a 0.3Hz cutoff FIR filter.",
+          "paper_equation": "4, 5",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "preprocessing.py",
+          "issue": "Per-channel z-score normalization correct",
+          "severity": "none",
+          "description": "Equation 6 computation of per-channel mean and standard deviation over training set only is correctly implemented. The epsilon term for numerical stability in denominator is present.",
+          "paper_equation": "6",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "preprocessing.py",
+          "issue": "Missing handling of PAMAP2 heart-rate interpolation",
+          "severity": "medium",
+          "description": "The paper specifies heart-rate sensor sampled at ~9Hz requiring interpolation to 50Hz (Section 3.1.3). The implementation only resamples to 50Hz without handling the asynchronous nature or using linear interpolation as specified in Equation 8.",
+          "paper_equation": "8",
+          "verification": "Basic resampling present; specific HR interpolation missing"
+        },
+        {
+          "file": "preprocessing.py",
+          "issue": "Missing value handling partial",
+          "severity": "low",
+          "description": "PAMAP2 gap interpolation (Equation 8) is partially implemented for short gaps but threshold for 'long gaps' (exceeding predefined threshold) is hardcoded without being configurable or documented.",
+          "paper_equation": "8",
+          "verification": "Partial; threshold not documented"
+        }
+      ]
+    },
+    "5_training_and_loss": {
+      "score": 2,
+      "max": 5,
+      "findings": [
+        {
+          "file": "train.py",
+          "issue": "Combined loss L_task missing semantic CE component",
+          "severity": "high",
+          "description": "Equation 37 specifies L_task = L_CE + lambda_ZSL * (lambda_align * L_align + lambda_sem-CE * L_sem-CE). The implementation only uses L_CE + lambda_ZSL * L_align, missing the semantic cross-entropy loss L_sem-CE (Equation 35). This prevents proper discriminative training of the compatibility function.",
+          "paper_equation": "37, 35",
+          "verification": "L_sem-CE not found in training code"
+        },
+        {
+          "file": "train.py",
+          "issue": "KAN function initialization incorrect",
+          "severity": "medium",
+          "description": "The paper specifies initializing spline coefficients to approximate the identity function phi_j^(l)(u) ~ u (Equation with identity approximation in Section 4.2.3). The implementation uses default PyTorch initialization which does not produce identity-approximating splines at initialization.",
+          "paper_equation": "Section 4.2.3",
+          "verification": "Uses default torch.nn.init; no custom spline initialization"
+        },
+        {
+          "file": "train.py",
+          "issue": "Dropout correctly implemented",
+          "severity": "none",
+          "description": "Dropout with Bernoulli mask as specified in Equation 23 is correctly implemented.",
+          "paper_equation": "23",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "train.py",
+          "issue": "Early stopping present but validation metric unclear",
+          "severity": "low",
+          "description": "Early stopping based on validation metric (Section 4.2.4) is implemented but uses accuracy instead of macro-F1 as specified. For ZSL scenarios, the harmonic mean H would be more appropriate but is not used.",
+          "paper_equation": "Section 4.2.4",
+          "verification": "Uses accuracy; paper specifies macro-F1 or harmonic mean"
+        }
+      ]
+    },
+    "6_tinyml_deployment": {
+      "score": 2,
+      "max": 5,
+      "findings": [
+        {
+          "file": "quantization.py",
+          "issue": "Uniform quantization formula correct",
+          "severity": "none",
+          "description": "Equation 42 quantization mapping with step size Delta and symmetric clipping to [-2^(b-1), 2^(b-1)-1] is correctly implemented.",
+          "paper_equation": "42",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "quantization.py",
+          "issue": "LUT-based spline evaluation not implemented",
+          "severity": "high",
+          "description": "The paper emphasizes that lookup table (LUT) based spline evaluation is critical for achieving 4.1ms latency and 320uJ energy on MCU (Table 10). This optimization is missing entirely - the code uses direct floating-point spline evaluation which the paper explicitly says would nearly double latency to 8.9ms. This is a critical gap for TinyML deployment.",
+          "paper_equation": "Section 3.6.3, Table 10",
+          "verification": "LUT not found in codebase"
+        },
+        {
+          "file": "quantization.py",
+          "issue": "Activation quantization present",
+          "severity": "none",
+          "description": "Activation quantization with per-layer scaling factors alpha^(l) as specified in Equation 41 is correctly implemented.",
+          "paper_equation": "41",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "tinyml_export.py",
+          "issue": "ONNX export exists but TFLite conversion incomplete",
+          "severity": "medium",
+          "description": "The paper specifies exporting to ONNX then converting to TensorFlow Lite Micro (TFLM). The export to ONNX works but the subsequent quantization and TFLM conversion is incomplete - only post-training quantization without quantization-aware training fine-tuning.",
+          "paper_equation": "Section 3.6.2",
+          "verification": "Partial; missing QAT fine-tuning"
+        }
+      ]
+    },
+    "7_datasets_and_evaluation": {
+      "score": 3,
+      "max": 5,
+      "findings": [
+        {
+          "file": "datasets.py",
+          "issue": "Dataset loading correct",
+          "severity": "none",
+          "description": "UCI HAR (30 subjects, 6 activities), WISDM (51 subjects, 18 activities), and PAMAP2 (9 subjects, 14 activities) splits are correctly implemented with subject-disjoint train/val/test partitioning.",
+          "paper_equation": "Section 3.1",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "datasets.py",
+          "issue": "ZSL label splits correct",
+          "severity": "none",
+          "description": "The seen/unseen class partitions match Table 1: UCI HAR (4 seen, 2 unseen), WISDM (14 seen, 4 unseen), PAMAP2 (14 seen, 4 unseen).",
+          "paper_equation": "Table 1",
+          "verification": "Correctly implemented"
+        },
+        {
+          "file": "evaluation.py",
+          "issue": "Metrics computed but harmonic mean H may use wrong formula",
+          "severity": "low",
+          "description": "The harmonic mean H = 2*Acc_seen*Acc_unseen/(Acc_seen+Acc_unseen) for gZSL is computed. However, the calibration factor gamma sweep for score calibration is not implemented - only fixed gamma=0.5 without sensitivity analysis.",
+          "paper_equation": "Section 4.3.2",
+          "verification": "Basic metrics correct; gamma sweep missing"
+        },
+        {
+          "file": "evaluation.py",
+          "issue": "Statistical significance testing not implemented",
+          "severity": "medium",
+          "description": "Paper Section 5.4 describes multi-run robustness with 5 random seeds and paired t-test for statistical significance. This is not implemented - only single-run evaluation is performed.",
+          "paper_equation": "Section 5.4",
+          "verification": "Not found in codebase"
+        }
+      ]
+    },
+    "8_configuration_and_reproducibility": {
+      "score": 3,
+      "max": 5,
+      "findings": [
+        {
+          "file": "config.yaml",
+          "issue": "Hyperparameters partially correct",
+          "severity": "low",
+          "description": "Learning rate range 1e-4 to 1e-3, batch sizes {32,64,128}, patience epochs, and L2 weight decay are documented. However, ZSL-specific lambda values (lambda_align, lambda_sem-CE) and spline hyperparameters (number of knots K^(l)) are missing from config.",
+          "paper_equation": "Section 4.2.2",
+          "verification": "Partial; ZSL lambdas and spline knots missing"
+        },
+        {
+          "file": "config.yaml",
+          "issue": "Random seed specification present",
+          "severity": "none",
+          "description": "Global random seed across NumPy, deep learning framework, and data loading is specified and enforced.",
+          "paper_equation": "Section 4.2.1",
+          "verification": "Correctly implemented"
+        }
+      ]
+    },
+    "9_documentation_and_structure": {
+      "score": 3,
+      "max": 5,
+      "findings": [
+        {
+          "file": "README.md",
+          "issue": "README exists but missing critical sections",
+          "severity": "medium",
+          "description": "README contains setup instructions and basic usage. Missing: detailed explanation of KAN architecture, ZSL module usage, TinyML deployment steps, expected results vs paper claims, and explainability usage.",
+          "paper_equation": "N/A",
+          "verification": "Incomplete documentation"
+        },
+        {
+          "file": "requirements.txt",
+          "issue": "Dependencies specified",
+          "severity": "none",
+          "description": "Core dependencies (torch, numpy, scikit-learn) are listed. Specific version constraints or notes on optional dependencies (e.g., onnx, tensorflow for TinyML export) are minimal.",
+          "paper_equation": "N/A",
+          "verification": "Adequate"
+        }
+      ]
+    },
+    "10_baseline_methods": {
+      "score": 2,
+      "max": 5,
+      "findings": [
+        {
+          "file": "baselines.py",
+          "issue": "CNN, LSTM, Transformer baselines missing",
+          "severity": "high",
+          "description": "Paper Table 3 compares TinyKAN-HAR against kNN, SVM, Random Forest, 1D-CNN, LSTM, CNN-LSTM, and Transformer baselines. Only kNN and SVM are implemented; the deep learning baselines (1D-CNN, LSTM, CNN-LSTM, Transformer) are missing entirely, preventing fair comparison against paper claims.",
+          "paper_equation": "Section 4.1.2, Table 3",
+          "verification": "Only kNN and SVM implemented"
+        },
+        {
+          "file": "baselines.py",
+          "issue": "Classical ML baselines present",
+          "severity": "none",
+          "description": "kNN, SVM (with RBF kernel), and Random Forest as specified in Section 4.1.1 are correctly implemented.",
+          "paper_equation": "Section 4.1.1",
+          "verification": "Correctly implemented"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "strengths": [
+      "KAN layer structure correctly implements linear mixing + univariate spline architecture (Equations 11-14)",
+      "Cosine similarity compatibility function for ZSL correctly implemented (Equation 31)",
+      "Data preprocessing pipeline (gravity separation, normalization) matches paper specifications",
+      "Subject-disjoint dataset splits and ZSL label partitions are correctly implemented",
+      "Quantization formula (Equation 42) is correctly implemented",
+      "Classical ML baselines (kNN, SVM, RF) are correctly implemented"
+    ],
+    "critical_gaps": [
+      "LUT-based spline evaluation missing - prevents TinyML deployment claims from being replicated",
+      "Semantic alignment loss L_align uses wrong computation (MSE on logits instead of projected features)",
+      "Semantic cross-entropy loss L_sem-CE entirely missing from training (Equation 35)",
+      "SHAP-style global importance not implemented",
+      "Deep learning baselines (CNN, LSTM, Transformer) not implemented - cannot compare with paper Table 3",
+      "KAN function initialization does not approximate identity function as specified",
+      "Spline smoothness regularization (Equation 21) not implemented"
+    ],
+    "recommendations": [
+      "Priority 1: Implement LUT-based spline evaluation for TinyML deployment",
+      "Priority 1: Fix alignment loss computation and add semantic cross-entropy loss",
+      "Priority 2: Implement deep learning baselines for fair comparison",
+      "Priority 2: Add SHAP-style global feature importance",
+      "Priority 3: Implement proper KAN spline initialization to identity function",
+      "Priority 3: Add spline smoothness regularization term"
+    ]
+  },
+  "expected_performance_vs_paper": {
+    "seen_class_accuracy": "Likely achievable ~97% given correct preprocessing and KAN architecture",
+    "zsl_accuracy": "Will be significantly lower than paper's 96%+ due to incorrect loss computation and missing semantic CE",
+    "tinyml_deployment": "Cannot be replicated without LUT implementation; direct spline evaluation yields 8.9ms not 4.1ms",
+    "explainability": "Partial - local attributions work but global SHAP and spline derivative analysis missing"
+  }
+}

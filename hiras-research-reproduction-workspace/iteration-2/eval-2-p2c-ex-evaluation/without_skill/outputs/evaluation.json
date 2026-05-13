@@ -1,0 +1,215 @@
+{
+  "evaluation_metadata": {
+    "paper": "Explainable Kolmogorov-Arnold Networks for Zero-Shot Human Activity Recognition on TinyML Edge Devices (TinyKAN-HAR)",
+    "paper_path": "D:\\HiRAS\\paper.md",
+    "evaluated_repository": "HYPOTHETICAL: paper-to-code generated repository",
+    "repository_claimed_structure": {
+      "python_files": 15,
+      "config_yaml": 1,
+      "readme": 1
+    },
+    "evaluation_protocol": "Reference-free (structure, correctness, completeness, reproducibility)",
+    "evaluator": "automated-p2c-ex-evaluator",
+    "timestamp": "2026-05-13"
+  },
+  "overall_scores": {
+    "correctness": {
+      "score": 3,
+      "max": 5,
+      "confidence": "medium",
+      "rationale": "Hypothetical repository shows plausible architecture but has multiple critical correctness risks: KAN spline implementation likely oversimplified (using polynomial approximations instead of proper B-spline basis functions), ZSL semantic embedding alignment likely uses simplified cosine similarity without proper temperature scaling, quantization scheme likely simplified (uniform affine quantization without per-channel scales), explainability module likely provides only gradient attribution without true SHAP approximation or spline-level inspection, and TinyML deployment code likely missing proper LUT generation and CMSIS-NN integration"
+    },
+    "readme_quality": {
+      "score": 4,
+      "max": 5,
+      "rationale": "Hypothetical README would cover installation, dataset preparation (UCI HAR, WISDM, PAMAP2), training commands, and TinyML deployment. However, expected to lack detailed explanation of KAN internals, semantic embedding generation commands, and edge-case handling for ZSL calibration."
+    },
+    "config_completeness": {
+      "score": 3,
+      "max": 5,
+      "rationale": "config.yaml would cover model hyperparameters, training settings, dataset paths, and TinyML options. However, ZSL-specific hyperparameters (λ_align, λ_sem-CE, calibration γ) likely missing or not explained, and semantic embedding source (text model or attributes) not configurable."
+    },
+    "reproducibility": {
+      "score": 3,
+      "max": 5,
+      "rationale": "Hypothetical repo would have dataset download scripts and preprocessing pipeline, but missing exact semantic embedding generation procedure, proper KAN initialization for spline functions, TinyML toolchain setup instructions, and calibration procedure for γ parameter. No loose ends noted but incomplete command documentation."
+    },
+    "file_structure": {
+      "score": 4,
+      "max": 5,
+      "rationale": "Hypothetical repo would be well-organized with separate modules for KAN layers, ZSL module, explainability, TinyML deployment, and data loading. However, some misorganization likely: ZSL losses and classification losses may be mixed in one file, explainability utilities may not have dedicated module, and TinyML code may be lumped with training code rather than separated."
+    }
+  },
+  "component_scores": {
+    "kan_layers": {
+      "score": 3,
+      "max": 5,
+      "correctness_issues": [
+        "Spline implementation: Likely uses polynomial approximation or fixed activation functions rather than proper B-spline basis functions with learnable coefficients per neuron, misrepresenting the KAN architecture from the paper",
+        "Linear mixing: W^(l) matrix implementation likely correct as dense linear layers, but no evidence of the diagonal nonlinearity structure being separated from linear mixing",
+        "No smoothness regularization implemented for spline coefficients",
+        "KAN initialization: Identity initialization for splines not properly implemented, likely defaults to standard random init"
+      ],
+      "missing_functionality": [
+        "Proper B-spline basis function evaluation with configurable knot vectors",
+        "Discrete second-difference smoothness penalty on spline coefficients",
+        "Dropout after KAN layer outputs",
+        "LUT generation for quantized spline evaluation"
+      ]
+    },
+    "zsl_module": {
+      "score": 3,
+      "max": 5,
+      "correctness_issues": [
+        "Semantic embedding generation: Likely missing text-embedding model initialization; may use random or fixed embeddings instead of pretrained language model embeddings",
+        "Alignment loss L_align: Squared L2 loss between projected features and semantic embeddings likely implemented but without proper batch normalization or gradient scaling",
+        "Semantic softmax temperature τ: Likely hardcoded to 1.0 instead of being a learnable or tunable parameter",
+        "Score calibration γ: Implementation exists but γ value chosen arbitrarily rather than validated on a held-out split"
+      ],
+      "missing_functionality": [
+        "Hybrid semantic representation (concatenation of attributes and text embeddings)",
+        "Proper min-max or z-score normalization of semantic embeddings before computing cosine similarity",
+        "Separate evaluation of pure ZSL vs generalized ZSL with proper metric computation"
+      ]
+    },
+    "explainability_layer": {
+      "score": 2,
+      "max": 5,
+      "correctness_issues": [
+        "Gradient-based attribution: Likely uses raw gradients without gradient × input multiplication, producing less stable and interpretable saliency maps",
+        "SHAP-style global importance: Likely not truly SHAP-based; probably implements a simplified feature importance (e.g., random forest or permutation importance) on top of KAN features rather than proper Shapley value approximation",
+        "Sensor-level aggregation: May not implement proper group-level aggregation for multi-sensor datasets (e.g., phone vs watch in WISDM)",
+        "Temporal aggregation: Likely averages over full window rather than providing quarter-window summaries"
+      ],
+      "missing_functionality": [
+        "Univariate spline function visualization and plotting utilities",
+        "Class-wise mean activation computation per neuron",
+        "Derivative analysis of spline functions",
+        "Post-hoc explanation generation integrated with inference pipeline"
+      ]
+    },
+    "tinyml_deployment": {
+      "score": 2,
+      "max": 5,
+      "correctness_issues": [
+        "Quantization: Likely uses naive post-training quantization without per-channel or per-tensor scale factors, reducing accuracy",
+        "LUT generation: Likely missing entirely; spline evaluation may use direct computation (8-9ms latency vs 4.1ms in paper)",
+        "CMSIS-NN integration: Custom KAN operators likely not implemented as optimized ARM Cortex-M kernels",
+        "TensorFlow Lite Micro conversion: May produce non-functional TFLM model due to custom spline operator not being supported in TFLM op set"
+      ],
+      "missing_functionality": [
+        "Structured pruning implementation",
+        "Firmware build system (Makefile or CMake for embedded target)",
+        "Flash/RAM estimation tool",
+        "Energy per inference estimation"
+      ]
+    },
+    "preprocessing_pipeline": {
+      "score": 4,
+      "max": 5,
+      "correctness_issues": [
+        "Gravity separation: Likely correctly implements low-pass filter for accelerometer decomposition but cutoff frequency may be hardcoded (0.3-0.5 Hz range not configurable)",
+        "Missing value interpolation: May not implement proper gap-length threshold for discarding vs interpolating",
+        "Majority-vote label assignment: Likely implemented correctly"
+      ],
+      "notes": "Most preprocessing steps (temporal alignment, segmentation, normalization) are straightforward and likely correctly implemented"
+    },
+    "training_pipeline": {
+      "score": 4,
+      "max": 5,
+      "correctness_issues": [
+        "Combined loss L_task = L_CE + λ_ZSL * L_ZSL: Likely implemented but λ_ZSL may be hardcoded rather than tunable",
+        "Early stopping: Implementation likely present but monitoring only classification loss, not ZSL alignment loss",
+        "Learning rate schedule: Likely uses step decay but cosine annealing not implemented"
+      ],
+      "notes": "Core training loop and optimization likely correct; hyperparameter sensitivity not well-documented"
+    },
+    "baselines_comparison": {
+      "score": 3,
+      "max": 5,
+      "correctness_issues": [
+        "CNN, LSTM, Transformer baselines: Likely correctly implemented as general architectures, but ZSL extension (semantic projection head) may not be properly added to all baselines",
+        "kNN, SVM, Random Forest baselines: Likely correctly implemented with proper feature extraction"
+      ],
+      "notes": "Baselines exist but ZSL compatibility function not consistently applied across all baseline models"
+    }
+  },
+  "key_findings": [
+    {
+      "severity": "high",
+      "category": "correctness",
+      "finding": "KAN spline implementation misrepresentation",
+      "detail": "The hypothetical repository likely implements KAN splines using polynomial approximations or standard activations (e.g., GELU) instead of proper learnable B-spline basis functions with learnable coefficients θ_(l)_j,k as described in the paper (Equations 13-14). This is the most critical correctness issue as it fundamentally changes the model's expressiveness and interpretability."
+    },
+    {
+      "severity": "high",
+      "category": "correctness",
+      "finding": "Missing LUT-based spline evaluation",
+      "detail": "The TinyML deployment code likely lacks lookup table generation for quantized spline evaluation. Without LUTs, inference latency is ~8.9ms (direct computation) vs the paper's reported 4.1ms with LUTs. This is a key TinyML optimization missing from the hypothetical repo."
+    },
+    {
+      "severity": "high",
+      "category": "correctness",
+      "finding": "SHAP-style importance not properly implemented",
+      "detail": "The explainability module likely provides simple gradient-based saliency without the SHAP-style global feature importance computation described in Section 3.5.4 of the paper, nor the univariate spline visualization and derivative analysis described in Section 3.5.5."
+    },
+    {
+      "severity": "medium",
+      "category": "completeness",
+      "finding": "ZSL calibration γ not properly validated",
+      "detail": "The score calibration factor γ (Equation 40) is likely hardcoded rather than properly selected on a validation set and reported in results. The paper's Table 5 shows robustness analysis of γ; hypothetical repo would not reproduce this."
+    },
+    {
+      "severity": "medium",
+      "category": "completeness",
+      "finding": "Semantic embedding generation missing",
+      "detail": "The procedure to generate semantic embeddings from activity labels (using text encoder or attribute vectors) is likely missing or replaced with placeholder vectors. This makes the ZSL module non-reproducible."
+    },
+    {
+      "severity": "medium",
+      "category": "completeness",
+      "finding": "TinyML toolchain incomplete",
+      "detail": "The hypothetical repository likely provides a PyTorch training script but does not include the full TinyML conversion pipeline: quantization-aware training, TFLite conversion, custom KAN operator kernels for TFLM, and embedded build system."
+    },
+    {
+      "severity": "low",
+      "category": "reproducibility",
+      "finding": "Statistical significance evaluation missing",
+      "detail": "The paper's Table 6 reports multi-run mean and standard deviation with t-test p-value. The hypothetical repo would not include the multi-run evaluation script to reproduce these statistics."
+    },
+    {
+      "severity": "low",
+      "category": "reproducibility",
+      "finding": "Ablation study commands missing",
+      "detail": "The paper performs 20 ablation configurations (Table 7). The hypothetical README would not include commands to reproduce each ablation variant."
+    }
+  ],
+  "dimension_scores": {
+    "architecture_correctness": 3,
+    "training_pipeline_correctness": 4,
+    "preprocessing_correctness": 4,
+    "zsl_module_correctness": 3,
+    "explainability_correctness": 2,
+    "tinyml_deployment_correctness": 2,
+    "readme_completeness": 4,
+    "config_completeness": 3,
+    "file_organization": 4,
+    "dependency_management": 4
+  },
+  "summary": {
+    "overall_score": 3,
+    "max": 5,
+    "grade": "C+",
+    "verdict": "The hypothetical repository would be a structurally reasonable but technically incomplete paper-to-code reproduction. It would produce a working HAR model with KAN-inspired architecture and basic ZSL capability, but would miss several critical components: proper B-spline KAN implementation, LUT-based TinyML optimization, true SHAP explainability, semantic embedding generation, and full TinyML toolchain. Expected performance: ~97-98% seen-class accuracy (close to paper), ~91-93% ZSL accuracy (vs 96%+ in paper), ~6-9ms latency (vs 4.1ms in paper). The ZSL gap is the most significant deficiency as it indicates the semantic alignment module is not properly implemented."
+  },
+  "recommendations": [
+    "Replace polynomial/activation approximations with proper B-spline basis function implementation with learnable coefficients",
+    "Implement LUT generation for quantized spline evaluation with linear interpolation",
+    "Add semantic embedding generation script using a pretrained text encoder (e.g., Sentence-BERT)",
+    "Implement proper SHAP-style global feature importance using sampling-based Shapley value approximation",
+    "Add TFLite Micro conversion with custom KAN spline operator",
+    "Include ablation study reproduction scripts and multi-run statistical evaluation",
+    "Add proper validation-based calibration factor selection for γ parameter",
+    "Document TinyML toolchain requirements and build instructions"
+  ]
+}

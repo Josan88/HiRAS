@@ -1,0 +1,10 @@
+{
+  "eval_id": 5, "eval_name": "rubric-mapping", "run_id": "eval-5-without_skill",
+  "assertions": [
+    {"text": "Produced structured rubric-to-phase mapping", "passed": true, "evidence": "Table mapping items to Planning, Architecture, Coding, Execution, Evaluation phases"},
+    {"text": "Mapped Code Development items to planning phases", "passed": false, "evidence": "Core algorithm mapped to Architecture instead of Plan; score function mapped to Architecture"},
+    {"text": "Mapped Execution items to execution phase", "passed": true, "evidence": "Training runs, metrics computed, ELBO within 5% mapped to Execution"},
+    {"text": "Mapped Result Match items to result-match phase", "passed": true, "evidence": "Figure 4, Table 1, convergence curves mapped to Evaluation"},
+    {"text": "Distinguished code/analysis phases from execution", "passed": false, "evidence": "No distinction between analysis and code phases — combined into 'Coding'"}
+  ]
+}

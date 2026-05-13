@@ -1,0 +1,446 @@
+# Configuration: TinyKAN-HAR — All Hyperparameters from Paper
+# Sources: Sections 3.1–3.6, 4.2, 5.1–5.8, Table 1–11
+# Values NOT from the paper are marked: # INFERRED or # TODO
+
+# =============================================================================
+# DATASET CONFIGURATION
+# =============================================================================
+
+datasets:
+  uci_har:
+    name: "UCI HAR"
+    path: "./data/UCI_HAR_Dataset"  # INFERRED: paper does not specify local path
+    n_subjects: 30
+    n_activities: 6
+    sampling_freq_hz: 50
+    sensors: ["accelerometer", "gyroscope"]
+    n_channels: 6
+    window_length_samples: 128  # Section 3.2.2: T=128 for UCI HAR
+    window_stride_samples: 64   # 50% overlap
+    n_seen_classes: 4           # WALKING, SITTING, STANDING, LAYING
+    n_unseen_classes: 2         # WALKING_UPSTAIRS, WALKING_DOWNSTAIRS
+    seen_classes: ["WALKING", "SITTING", "STANDING", "LAYING"]
+    unseen_classes: ["WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS"]
+    subject_split:
+      n_train: 21
+      n_val: 4   # randomly selected from 21 training subjects
+      n_test: 9
+    preprocessing:
+      gravity_cutoff_hz: 0.3    # Section 3.2.3: FIR low-pass cutoff 0.3–0.5 Hz
+      normalize_per_channel: true  # Section 3.2.4: z-score normalization
+
+  wisdm:
+    name: "WISDM"
+    path: "./data/WISDM_Dataset"  # INFERRED
+    n_subjects: 51
+    n_activities: 18
+    sampling_freq_hz: 20
+    sensors: ["phone_acc", "phone_gyro", "watch_acc", "watch_gyro"]
+    n_channels: 12
+    window_length_samples: 200   # Section 3.2.2: T=200 for WISDM (10s at 20Hz)
+    window_stride_samples: 100   # 50% overlap
+    n_seen_classes: 14
+    n_unseen_classes: 4         # jogging, walking_upstairs, walking_downstairs, jumping
+    seen_classes: ["walking", "jogging", "typing", "brushing_teeth", ...]  # 14 total; INFERRED full list
+    unseen_classes: ["jogging", "walking_upstairs", "walking_downstairs", "jumping"]
+    subject_split:
+      n_train: 35
+      n_val: 8
+      n_test: 8
+    preprocessing:
+      normalize_per_channel: true
+
+  pamap2:
+    name: "PAMAP2"
+    path: "./data/PAMAP2_Dataset"  # INFERRED
+    n_subjects: 9
+    n_activities: 18
+    sampling_freq_original_hz: 100
+    sampling_freq_target_hz: 50   # Section 3.2.1: downsample to 50 Hz
+    sensors: ["IMU_wrist", "IMU_chest", "IMU_ankle", "heart_rate"]
+    n_channels_raw: 28
+    window_length_samples: 250    # Section 3.2.2: T=250 for PAMAP2 (5s at 50Hz)
+    window_stride_samples: 125     # 50% overlap
+    n_seen_classes: 14
+    n_unseen_classes: 4           # running, rope_jumping, vacuum_cleaning, ironing
+    unseen_classes: ["running", "rope_jumping", "vacuum_cleaning", "ironing"]
+    subject_split:
+      n_train: 6
+      n_val: 1
+      n_test: 2
+    preprocessing:
+      resample_to_50hz: true
+      interpolate_hr: true        # heart-rate sensor at ~9 Hz
+      normalize_per_channel: true
+
+# =============================================================================
+# MODEL ARCHITECTURE — KAN FEATURE EXTRACTOR
+# =============================================================================
+
+kan:
+  n_layers: 3                    # Section 5.6: L=3 selected as optimal
+  latent_dim: 128                # Section 5.6: d_L=128 selected as optimal
+  width_schedule:                # INFERRED: pyramidal structure; d_0 >> d_L
+    - 768   # d_0: T * D = 128 * 6 = 768 for UCI HAR
+    - 256   # d_1
+    - 128   # d_2
+    - 128   # d_L = d_3
+  spline:
+    n_basis_functions: 5         # INFERRED: paper mentions "coarse" vs "fine" spline; default 5
+    basis_type: "bspline"         # Section 3.3.2: B-spline basis
+    spline_order: 3               # cubic B-splines; INFERRED
+  initialization:
+    spline_init: "identity"        # Section 4.2.3: spline initialized to approximate identity
+    linear_weight_init: "xavier"  # Section 4.2.3: Xavier/He initialization
+    bias_init: 0.0
+  dropout_prob: 0.2               # Section 5.7, Row 19–20: default p=0.2
+
+# =============================================================================
+# ZERO-SHOT LEARNING MODULE
+# =============================================================================
+
+zsl:
+  semantic_dim: 512               # TODO: paper does not explicitly state m; # INFERRED
+  temperature: 0.1                # Section 3.4.4: τ in Eq. 34; INFERRED
+  calibration_margin: 0.5          # Section 3.4.7, Eq. 40: γ* = 0.5 selected on validation
+  embedding_type: "hybrid"        # Section 5.7.1: default is HYBRID (attribute + text concat)
+  text_encoder: "bert"             # INFERRED; paper mentions "pretrained language model"
+  attribute_source: "manual"       # Section 5.7.1: manual attributes for ATTR variant
+  lambda_align: 1.0               # TODO: λ_align in Eq. 36; # INFERRED from paper balance
+  lambda_sem_ce: 1.0              # TODO: λ_sem-CE in Eq. 36; # INFERRED
+  lambda_zsl: 1.0                 # λ_ZSL in Eq. 37; INFERRED
+
+# =============================================================================
+# TRAINING — SEEN CLASSES (EXPERIMENTS 1, 6)
+# =============================================================================
+
+training:
+  optimizer: "adam"
+  learning_rate: 0.001           # Section 4.2.2: η_0 ∈ [10⁻⁴, 10⁻³]; INFERRED η_0=10⁻³
+  lr_schedule: "cosine_annealing"  # Section 4.2.2: optional step or cosine annealing
+  batch_size: 64                  # Section 4.2.2: N_b ∈ {32, 64, 128}; INFERRED 64
+  max_epochs: 200                 # Section 4.2.2: E_max ∈ [100, 200]; INFERRED 200
+  early_stopping:
+    patience: 20                  # Section 4.2.4: E_patience; INFERRED
+    monitor: "val_macro_f1"       # Section 4.2.4: macro-F1 as validation metric
+    mode: "max"
+  gradient_clip: 1.0              # TODO: paper does not specify; # INFERRED
+
+  # Regularization
+  lambda_l2: 0.0001              # Section 4.2.2: λ_ℓ2 weight decay; INFERRED
+  lambda_smooth: 0.001            # Section 3.3.5: smoothness regularization; INFERRED
+  lambda_lin: 0.0001             # Section 3.3.5: linear weight regularization; INFERRED
+
+# =============================================================================
+# TRAINING — ZSL (EXPERIMENTS 2–4, 8–9)
+# =============================================================================
+
+zsl_training:
+  joint_training: true            # Joint optimization of KAN + ZSL losses (Eq. 37)
+  lambda_ce: 1.0                 # Weight of standard cross-entropy (Eq. 18)
+  lambda_zsl_loss: 1.0           # Weight of full ZSL loss L_ZSL (Eq. 37)
+  warmup_epochs: 0               # TODO: paper does not specify warmup; # INFERRED: no warmup
+
+# =============================================================================
+# EVALUATION METRICS
+# =============================================================================
+
+metrics:
+  seen_class:
+    - accuracy
+    - precision_macro
+    - recall_macro
+    - f1_macro
+    - precision_micro
+    - recall_micro
+    - f1_micro
+  zsl:
+    - acc_zsl          # Pure ZSL accuracy on unseen classes
+  gzsl:
+    - acc_seen
+    - acc_unseen
+    - harmonic_mean    # H = 2*Acc_seen*Acc_unseen / (Acc_seen + Acc_unseen)
+  tinyml:
+    - model_size_kb
+    - peak_ram_kb
+    - latency_ms
+    - energy_uj        # microjoules per inference
+
+# =============================================================================
+# QUANTIZATION AND TINYML DEPLOYMENT
+# =============================================================================
+
+quantization:
+  default_precision: "int8"      # Default for TinyML deployment
+  weight_bits: 8                 # Section 3.6.1: b ∈ {8, 16}; default 8-bit
+  activation_bits: 8
+  method: "symmetric_uniform"    # Section 3.6.1: Eq. 42
+  per_layer_scale: true          # Layer-wise scale factors Δ
+  post_training_quant: true      # Section 3.6.1: PTQ with optional fine-tuning
+  quantization_aware_training: false  # Optional QAT fine-tuning
+
+lut:
+  grid_points: 256                # INFERRED: LUT grid size for spline evaluation
+  interpolation: "linear"        # Section 3.6.3: linear interpolation between grid points
+  dtype: "int8"                  # Store LUT entries as int8
+
+tinyml_target:
+  mcu: "Cortex-M4F"             # Section 5.8: target platform
+  flash_kb: 256                  # Available flash
+  ram_kb: 64                     # Available SRAM
+  clock_mhz: 80                  # Section 5.8: 80 MHz
+
+pruning:
+  structured_prune_rates:       # Section 5.7, Rows 15–16
+    - 0.0   # baseline (no pruning)
+    - 0.5   # 50% structured pruning
+    - 0.7   # 70% structured pruning
+  method: "structured"          # Section 3.6.1: structured (row/column) pruning
+
+# =============================================================================
+# ABLATION STUDY CONFIGURATIONS (EXPERIMENT 7)
+# =============================================================================
+
+ablations:
+  base_config:
+    precision: "int8"
+    L: 3
+    d_L: 128
+    dropout: 0.2
+
+  variants:
+    # Precision
+    - id: "fp32"
+      label: "Full TinyKAN-HAR (FP32, L=3, dL=128)"
+      precision: "fp32"
+
+    - id: "int8"
+      label: "Full TinyKAN-HAR (int8, L=3, dL=128)"
+      precision: "int8"
+
+    # ZSL losses and calibration
+    - id: "wo_zsl_losses"
+      label: "w/o ZSL losses"
+      lambda_zsl_loss: 0.0
+
+    - id: "wo_calibrated"
+      label: "w/o calibrated scores"
+      zsl_calibration_margin: 0.0
+
+    # Semantic interface and explainability
+    - id: "wo_semantic_proj"
+      label: "w/o semantic projection layer"
+      zsl_use_projection: false
+
+    - id: "wo_smoothness_reg"
+      label: "w/o explainability regularizer"
+      lambda_smooth: 0.0
+
+    # KAN depth and width
+    - id: "shallow_kan"
+      label: "Shallow KAN (L=1, dL=64)"
+      L: 1
+      d_L: 64
+
+    - id: "deep_kan"
+      label: "Deep KAN (L=4, dL=128)"
+      L: 4
+      d_L: 128
+
+    - id: "narrow_latent"
+      label: "Narrow latent (L=3, dL=64)"
+      L: 3
+      d_L: 64
+
+    - id: "wide_latent"
+      label: "Wide latent (L=3, dL=256)"
+      L: 3
+      d_L: 256
+
+    # Spline resolution
+    - id: "coarse_spline"
+      label: "Coarse spline (fewer knots)"
+      kan_spline_n_basis: 3      # INFERRED: reduced from default 5
+
+    - id: "fine_spline"
+      label: "Fine spline (more knots)"
+      kan_spline_n_basis: 8       # INFERRED: increased from default 5
+
+    # LUT vs. direct evaluation
+    - id: "wo_luts"
+      label: "w/o LUTs (direct spline evaluation)"
+      use_luts: false
+
+    - id: "quant_only"
+      label: "Quantization only (no LUT)"
+      use_luts: false
+
+    # Structured pruning
+    - id: "prune_50"
+      label: "Quant. + 50% structured pruning"
+      prune_rate: 0.5
+
+    - id: "prune_70"
+      label: "Quant. + 70% structured pruning"
+      prune_rate: 0.7
+
+    # Window length
+    - id: "short_window"
+      label: "Short window (reduced T)"
+      window_scale: 0.5          # INFERRED: T * 0.5
+
+    - id: "long_window"
+      label: "Long window (increased T)"
+      window_scale: 1.5           # INFERRED: T * 1.5
+
+    # Dropout
+    - id: "low_dropout"
+      label: "Low dropout (p=0.1)"
+      dropout_prob: 0.1
+
+    - id: "high_dropout"
+      label: "High dropout (p=0.5)"
+      dropout_prob: 0.5
+
+# =============================================================================
+# SEMANTIC ABLATION (EXPERIMENTS 8–9)
+# =============================================================================
+
+semantic_ablation:
+  representations:
+    - id: "attr"
+      label: "ATTR (attributes only)"
+      embedding_type: "attributes"
+
+    - id: "text"
+      label: "TEXT (text embeddings only)"
+      embedding_type: "text"
+
+    - id: "hybrid"
+      label: "HYBRID (concat + projection)"
+      embedding_type: "hybrid"
+
+  structure_ablations:
+    - id: "hybrid_meaningful"
+      label: "HYBRID (meaningful embeddings)"
+      embedding_type: "hybrid"
+      shuffle_embeddings: false
+
+    - id: "random"
+      label: "RANDOM (Gaussian embeddings)"
+      embedding_type: "random_gaussian"
+      shuffle_embeddings: false
+
+    - id: "shuffled"
+      label: "SHUFFLED (permuted labels)"
+      embedding_type: "hybrid"
+      shuffle_embeddings: true
+
+# =============================================================================
+# CALIBRATION SWEEP (EXPERIMENT 3)
+# =============================================================================
+
+calibration_sweep:
+  gamma_values: [0.0, 0.25, 0.5, 0.75, 1.0]  # Section 5.3
+  optimal_gamma: 0.5               # γ* selected on validation set
+
+# =============================================================================
+# MULTI-SEED EVALUATION (EXPERIMENT 4)
+# =============================================================================
+
+multi_seed:
+  n_runs: 5                       # Section 5.4: 5 random seeds
+  seeds: [42, 123, 456, 789, 1010]  # INFERRED: standard seeds
+  significance_level: 0.01         # p < 0.01 expected
+
+# =============================================================================
+# VISUALIZATION AND EXPLANATIONS (EXPERIMENTS 5, 11–13)
+# =============================================================================
+
+visualization:
+  case_study_activities:
+    - "WALKING"
+    - "SITTING"
+    - "WALKING_UPSTAIRS"
+  attribution_method: "gradient_times_input"  # Section 3.5.1
+  shap_n_samples: 100             # Section 3.5.4: INFERRED; sampling-based SHAP
+  spline_n_points: 256             # Number of points to sample per spline for plotting
+  figure_dpi: 300
+
+# =============================================================================
+# BASELINE MODELS (EXPERIMENTS 1, 10)
+# =============================================================================
+
+baselines:
+  knn:
+    k: 5                          # INFERRED: k selected on validation
+    metric: "euclidean"
+
+  svm:
+    kernel: "rbf"
+    C: 1.0                        # INFERRED: regularization strength
+    gamma: "scale"
+
+  random_forest:
+    n_estimators: 100             # INFERRED
+    max_depth: null
+    min_samples_split: 2
+
+  cnn_1d:
+    n_layers: 3                  # INFERRED
+    n_filters: [32, 64, 128]      # INFERRED
+    kernel_sizes: [5, 3, 3]       # INFERRED
+    pool_sizes: [2, 2, 2]          # INFERRED
+    dropout: 0.2
+
+  lstm:
+    hidden_size: 128              # INFERRED
+    n_layers: 2
+    bidirectional: false
+    dropout: 0.2
+
+  cnn_lstm:
+    cnn_n_layers: 2               # INFERRED
+    lstm_hidden: 128
+    lstm_n_layers: 1
+
+  transformer:
+    d_model: 128                   # INFERRED
+    nhead: 4                      # INFERRED
+    n_layers: 2                   # INFERRED
+    dim_feedforward: 512          # INFERRED
+    dropout: 0.2
+
+# =============================================================================
+# REPORTED PAPER RESULTS (EXPECTED VALUES FOR VALIDATION)
+# =============================================================================
+
+expected_results:
+  seen_class_accuracy:
+    uci_har:
+      tinykan_har: 98.3           # Table 3
+      transformer: 98.0
+      cnn_lstm: 97.8
+    wisdm:
+      tinykan_har: 97.9           # Table 3
+      transformer: 97.9
+    pamap2:
+      tinykan_har: 97.3           # Table 3
+      transformer: 97.3
+
+  zsl_accuracy:
+    uci_har:
+      acc_zsl_tinykan: 96.4       # Table 4
+      acc_zsl_transformer: 93.2
+      h_tinykan: 96.7             # Table 4
+    pamap2:
+      acc_zsl_tinykan: 96.0       # Table 4
+      h_tinykan: 96.0             # Table 4
+
+  tinyml_metrics:
+    tinykan_tiny:
+      model_kb: 145               # Table 10
+      ram_kb: 26
+      latency_ms: 4.1
+      energy_uj: 320
+      accuracy_pct: 98.3

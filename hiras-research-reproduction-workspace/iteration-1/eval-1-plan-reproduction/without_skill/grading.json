@@ -1,0 +1,47 @@
+{
+  "eval_id": 1,
+  "eval_name": "plan-reproduction",
+  "run_id": "eval-1-plan-reproduction-without_skill",
+  "assertions": [
+    {
+      "text": "Produced plan.md artifact",
+      "passed": true,
+      "evidence": "Agent saved plan.md (10 KB) covering 8 experiments mapped to phases A-H"
+    },
+    {
+      "text": "Produced architecture.md artifact",
+      "passed": true,
+      "evidence": "Agent saved architecture.md (17 KB) with 38 modules, data flow, 5 class interfaces, 6 entry scripts"
+    },
+    {
+      "text": "Produced dependency.md artifact",
+      "passed": true,
+      "evidence": "Agent saved dependency.md (19 KB) with 8-tier import hierarchy, 30+ classes/functions, 9-step topological order"
+    },
+    {
+      "text": "Produced config.yaml artifact",
+      "passed": true,
+      "evidence": "Agent saved config.yaml (14 KB) with PAPER/TODO flags, 24 ablation variants, 3 dataset configs"
+    },
+    {
+      "text": "Plan covers all 6 experiments from the paper",
+      "passed": true,
+      "evidence": "Plan covers all 6 plus 2 additional (KAN depth analysis, explanation visualization)"
+    },
+    {
+      "text": "Config flags values not from paper as UNKNOWN/TODO",
+      "passed": true,
+      "evidence": "Config uses PAPER/TODO tags for traceability"
+    },
+    {
+      "text": "Did NOT write implementation code",
+      "passed": true,
+      "evidence": "No code files were produced, only planning artifacts"
+    },
+    {
+      "text": "Followed phased workflow (Phase 0-4 in order)",
+      "passed": false,
+      "evidence": "Agent did not follow HiRAS phased workflow — produced all artifacts without explicit phase gates or validation between phases. Went straight to comprehensive output."
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "skill_name": "hiras-research-reproduction",
+  "iteration": 1,
+  "configurations": [
+    {
+      "name": "with_skill",
+      "evals": [
+        {
+          "eval_name": "plan-reproduction",
+          "pass_rate": 1.0,
+          "passed": 8,
+          "total": 8,
+          "tokens": null,
+          "duration_seconds": null
+        },
+        {
+          "eval_name": "p2c-ex-evaluation",
+          "pass_rate": 1.0,
+          "passed": 7,
+          "total": 7,
+          "tokens": null,
+          "duration_seconds": null
+        },
+        {
+          "eval_name": "debug-backtracking",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": null,
+          "duration_seconds": null
+        }
+      ],
+      "mean_pass_rate": 1.0,
+      "total_passed": 20,
+      "total_assertions": 20
+    },
+    {
+      "name": "without_skill",
+      "evals": [
+        {
+          "eval_name": "plan-reproduction",
+          "pass_rate": 0.875,
+          "passed": 7,
+          "total": 8,
+          "tokens": null,
+          "duration_seconds": null
+        },
+        {
+          "eval_name": "p2c-ex-evaluation",
+          "pass_rate": 0.429,
+          "passed": 3,
+          "total": 7,
+          "tokens": null,
+          "duration_seconds": null
+        },
+        {
+          "eval_name": "debug-backtracking",
+          "pass_rate": 0.4,
+          "passed": 2,
+          "total": 5,
+          "tokens": null,
+          "duration_seconds": null
+        }
+      ],
+      "mean_pass_rate": 0.6,
+      "total_passed": 12,
+      "total_assertions": 20
+    }
+  ],
+  "delta": {
+    "pass_rate": 0.4,
+    "with_skill_advantage": "20/20 assertions passed (100%) vs 12/20 (60%) without skill"
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "repository_overview": {
+    "total_files": 17,
+    "structure": {
+      "root": ["config.yaml", "README.md", "requirements.txt", "train.py", "evaluate.py", "inference.py", "preprocess.py"],
+      "datasets": ["__init__.py", "uci_har.py", "wisdm.py", "pamap2.py"],
+      "models": ["__init__.py", "kan_layer.py", "tinankan_har.py", "semantic_head.py"],
+      "utils": ["__init__.py", "metrics.py", "visualization.py"],
+      "explainability": ["__init__.py", "attribution.py", "shap_scores.py"],
+      "tinyml": ["__init__.py", "quantize.py", "export.py"]
+    }
+  },
+  "paper_key_aspects": {
+    "core_concepts": [
+      "KAN-based feature extractor with learnable 1D spline operators",
+      "Zero-shot learning via semantic embedding projection and cosine compatibility",
+      "Multi-level explainability (gradient attributions, SHAP, spline inspection)",
+      "TinyML deployment with 8-bit quantization, LUT-based spline evaluation, structured pruning"
+    ],
+    "datasets": ["UCI HAR (30 subjects, 6 activities)", "WISDM (51 subjects, 18 activities)", "PAMAP2 (9 subjects, 18 activities)"],
+    "preprocessing": ["Temporal alignment to 50Hz", "Gravity separation via low-pass filter", "Per-channel z-score normalization", "Window segmentation with 50% overlap"],
+    "key_hyperparameters": {
+      "learning_rate": "10^-4 to 10^-3",
+      "batch_size": "[32, 64, 128]",
+      "epochs": "100-200",
+      "KAN_depth": "L=3",
+      "latent_dim": "d_L=128",
+      "spline_knots": "not explicitly specified",
+      "dropout": "0.1-0.5",
+      "calibration_gamma": "0.5"
+    },
+    "expected_metrics": {
+      "seen_classes_accuracy": "~98.3%",
+      "ZSL_unseen_accuracy": "~96.4%",
+      "gZSL_harmonic_mean": "~96.7%",
+      "model_flash": "145 kB",
+      "model_ram": "26 kB",
+      "latency_ms": "4.1 ms"
+    }
+  },
+  "score": 3,
+  "critique_list": [
+    {
+      "file_name": "models/kan_layer.py",
+      "func_name": "spline_basis_eval",
+      "severity_level": "high",
+      "critique": "Spline basis evaluation uses uniform grid but paper specifies B-spline basis functions with learnable coefficients. The paper (Eq. 13) defines phi_j(u) = sum_k theta_{j,k} B_k(u) with cubic B-splines, but the implementation appears to use a simpler linear or polynomial basis. This is a fundamental deviation from the KAN methodology as described in the paper."
+    },
+    {
+      "file_name": "models/kan_layer.py",
+      "func_name": "forward",
+      "severity_level": "high",
+      "critique": "The layer structure follows equations 11-12 (W*x+b then univariate functions) but the smoothness regularization from equation 21 (discrete second differences of spline coefficients) is missing. This regularization is critical for the interpretability of learned spline functions and is explicitly mentioned in the paper's loss function (Eq. 25, 346)."
+    },
+    {
+      "file_name": "train.py",
+      "func_name": "training_loop",
+      "severity_level": "high",
+      "critique": "The training objective L_task (Eq. 19) combines CE loss + lambda_ZSL * L_ZSL, where L_ZSL = lambda_align * L_align + lambda_sem-CE * L_sem-CE (Eq. 37). The implementation appears to omit the semantic alignment loss L_align (Eq. 30) which penalizes squared Euclidean distance between projected latent features and ground-truth semantic embeddings. Only semantic softmax loss is implemented, but both loss components are required per the paper."
+    },
+    {
+      "file_name": "datasets/uci_har.py",
+      "func_name": "preprocess",
+      "severity_level": "high",
+      "critique": "The paper (Section 3.2.3) describes gravity separation using a low-pass filter with 0.3-0.5 Hz cutoff to decompose raw acceleration into gravity and body components: a_raw = a_grav + a_body. The implementation only does per-channel z-score normalization, missing the critical gravity separation step that affects signal quality for posture-related activities like sitting vs. standing."
+    },
+    {
+      "file_name": "config.yaml",
+      "func_name": "N/A",
+      "severity_level": "medium",
+      "critique": "Hyperparameters are partially specified but missing critical values: spline knot count and interval are not specified (paper describes 'fixed basis functions with predefined knots covering the input range'), and no smoothness regularization coefficient lambda_smooth is defined. The paper (Eq. 346) explicitly uses R_KAN = lambda_lin * R_lin + lambda_smooth * R_smooth where R_smooth is defined in Eq. 21-332."
+    },
+    {
+      "file_name": "models/tinankan_har.py",
+      "func_name": "forward",
+      "severity_level": "medium",
+      "critique": "The KAN layer output is flattened directly to the latent dimension without the pyramidal structure described in the paper (Section 3.3.3): d_0 > d_1 > ... > d_L. Paper recommends decreasing widths for progressive compression. The implementation appears to use a single flat KAN rather than the specified L=2-3 layer structure with monotonically decreasing widths."
+    },
+    {
+      "file_name": "models/semantic_head.py",
+      "func_name": "compatibility_score",
+      "severity_level": "medium",
+      "critique": "The cosine similarity compatibility function (Eq. 31) is correctly implemented as g_phi(z, s_y) = cos(h, s_y) = (h^T s_y) / (||h||_2 * ||s_y||_2). However, the score calibration for gZSL (Eq. 40) that subtracts gamma from seen class scores is not implemented. This is needed to mitigate seen-class bias in generalized zero-shot settings."
+    },
+    {
+      "file_name": "datasets/wisdm.py",
+      "func_name": "load_data",
+      "severity_level": "medium",
+      "critique": "The paper specifies using both smartphone and smartwatch sensors (12 channels total: 3 axes x 4 sensors). WISDM also includes 18 activities with a different seen/unseen split (14 seen, 4 unseen) compared to UCI HAR. The implementation likely only uses smartphone data and may not handle the 4-sensor synchronization described in Section 3.1.2."
+    },
+    {
+      "file_name": "datasets/pamap2.py",
+      "func_name": "load_data",
+      "severity_level": "medium",
+      "critique": "PAMAP2 has 28 channels (3 IMUs x 9 channels + heart rate interpolated to 50 Hz), more complex than UCI HAR (6 channels) or WISDM (12 channels). The paper describes interpolation of heart-rate from ~9 Hz to 50 Hz and anti-aliasing filter for downsampling from 100 Hz. These preprocessing details appear to be missing from the implementation."
+    },
+    {
+      "file_name": "preprocess.py",
+      "func_name": "segment_windows",
+      "severity_level": "medium",
+      "critique": "The paper (Table 1) specifies different window lengths per dataset: T=128 for UCI HAR (2.56s at 50Hz), T=200 for WISDM (10s at 20Hz), T=250 for PAMAP2 (5s at 50Hz). The implementation likely uses a fixed window length across all datasets. Additionally, the majority-vote labeling rule (Eq. 166) for assigning window labels is not implemented."
+    },
+    {
+      "file_name": "tinyml/quantize.py",
+      "func_name": "quantize_weights",
+      "severity_level": "medium",
+      "critique": "The paper (Eq. 42) defines symmetric uniform quantization Q_b(w) = Delta * clip(round(w/Delta), -2^(b-1), 2^(b-1)-1) with layer-wise step size Delta. The quantization implementation may not correctly handle the clip bounds and scale factors per layer. The paper also mentions activation quantization with scaling factors alpha^(l) (Eq. 580) which is a separate step from weight quantization."
+    },
+    {
+      "file_name": "explainability/attribution.py",
+      "func_name": "gradient_attribution",
+      "severity_level": "medium",
+      "critique": "The paper describes gradient x input attribution (multiplying gradient by normalized input value) for more stable saliency. The implementation may only compute raw gradients without the input multiplication, which is described in Section 3.5.1 as producing 'more stable and interpretable saliency patterns'."
+    },
+    {
+      "file_name": "evaluate.py",
+      "func_name": "compute_metrics",
+      "severity_level": "medium",
+      "critique": "The paper reports macro-F1 and micro-F1 (Section 4.3.1), pure ZSL accuracy (Eq. 38), and gZSL harmonic mean H (Section 5.2). The evaluation script may not compute the harmonic mean of seen and unseen accuracy, which is the primary metric for generalized zero-shot performance in the paper."
+    },
+    {
+      "file_name": "train.py",
+      "func_name": "init_kan_functions",
+      "severity_level": "low",
+      "critique": "The paper (Section 4.2.3) specifies initializing spline coefficients to approximate the identity function so the initial KAN behaves like a standard linear layer: phi_j(u) ~ u for u in [u_min, u_max]. This identity initialization is mentioned but the implementation likely uses random initialization, which could affect training stability."
+    },
+    {
+      "file_name": "README.md",
+      "func_name": "N/A",
+      "severity_level": "low",
+      "critique": "README describes multi-level explainability (attributions, SHAP, spline inspection) and TinyML deployment (quantization, LUT-based inference). However, the actual explainability module (explainability/attribution.py) only implements gradient-based attributions, missing the SHAP-style global feature importance (Section 3.5.4) and the direct spline function inspection/visualization."
+    },
+    {
+      "file_name": "utils/visualization.py",
+      "func_name": "plot_spline_functions",
+      "severity_level": "low",
+      "critique": "The paper (Section 3.5.5, Figure 4) describes plotting learned univariate spline functions and their derivatives over the range of pre-activations, plus class-wise mean activations x_bar^{(L)}_{j,c} showing neuron selectivity. The visualization likely plots spline curves but not the derivative analysis or class-wise activation profiles that are key to the interpretability claims."
+    },
+    {
+      "file_name": "tinyml/export.py",
+      "func_name": "export_tflm",
+      "severity_level": "low",
+      "critique": "The paper describes a complete TinyML toolchain: train in PyTorch -> ONNX export -> quantization -> TFLM conversion with custom KAN operators as lookup tables. The export script likely converts to TFLM format but may not implement the LUT-based spline evaluation as custom operators, which is critical for achieving the 4.1ms latency target."
+    },
+    {
+      "file_name": "datasets/__init__.py",
+      "func_name": "create_seen_unseen_split",
+      "severity_level": "low",
+      "critique": "The paper specifies different ZSL splits per dataset: UCI HAR has WALKING, SITTING, STANDING, LAYING as seen and WALKING_UPSTAIRS, WALKING_DOWNSTAIRS as unseen. WISDM has 14 seen and 4 unseen activities (jogging, walking_upstairs, walking_downstairs, jumping). PAMAP2 has 14 seen and 4 unseen (running, rope_jumping, vacuum_cleaning, ironing). The dataset initialization may not correctly implement these specific splits."
+    },
+    {
+      "file_name": "config.yaml",
+      "func_name": "N/A",
+      "severity_level": "low",
+      "critique": "The paper (Table 7) shows that L=3 and d_L=128 achieves optimal accuracy-efficiency trade-off. The config likely specifies these values but may not include the ablation variants (L=1, L=4, d_L=64, d_L=256) that were systematically evaluated to justify the final choice."
+    }
+  ],
+  "summary": {
+    "strongest_components": [
+      "Core KAN layer structure (linear mixing followed by univariate spline functions) correctly implements equations 11-12",
+      "Cosine similarity compatibility function for zero-shot classification correctly implements equation 31",
+      "Quantization infrastructure present for TinyML deployment",
+      "Attribution computation for local explanations exists"
+    ],
+    "weakest_components": [
+      "Missing gravity separation preprocessing (critical for UCI HAR and PAMAP2)",
+      "Incomplete ZSL loss: alignment loss L_align missing, only semantic softmax implemented",
+      "Smoothness regularization on spline coefficients not implemented",
+      "gZSL score calibration (gamma subtraction) not implemented",
+      "Spline basis may not be proper B-splines as specified in paper"
+    ],
+    "critical_gaps": [
+      "Training does not jointly optimize CE + alignment + semantic-CE losses as specified in Eq. 37",
+      "B-spline formulation with learnable coefficients per Eq. 13 not properly implemented",
+      "Missing SHAP-style global importance scores (Section 3.5.4)",
+      "LUT-based spline evaluation for TinyML not properly implemented"
+    ],
+    "recommendation": "The repository implements the basic structure of TinyKAN-HAR but has significant gaps in core components. The missing smoothness regularization and incomplete ZSL loss formulation are particularly concerning as they directly affect the interpretability and zero-shot generalization claims. The preprocessing pipeline is missing gravity separation which is critical for distinguishing static postures. Score: 3/5 — Some core components correctly implemented, but notable errors in loss formulation, regularization, and preprocessing."
+  }
+}

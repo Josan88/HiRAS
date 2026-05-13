@@ -1,0 +1,291 @@
+# TinyKAN-HAR Reproduction Configuration
+# All hyperparameters, paths, and experiment settings
+
+# ─── Project Paths ──────────────────────────────────────────────
+project_root: "D:/HiRAS"
+data_root: "D:/HiRAS/data/raw"
+output_root: "D:/HiRAS/hiras-research-reproduction-workspace/iteration-2/eval-1-plan-reproduction/without_skill/outputs"
+
+# ─── Random Seeds ───────────────────────────────────────────────
+seeds:
+  primary: 42
+  multi_seed_exp: [0, 7, 13, 21, 42]  # 5 seeds for Experiment 4
+
+# ─── Dataset Configuration ──────────────────────────────────────
+
+datasets:
+  uci_har:
+    name: "UCI HAR"
+    path: "D:/HiRAS/data/raw/UCI HAR"
+    fs: 50  # Hz
+    T: 128  # window length
+    D: 6    # channels (acc xyz + gyro xyz)
+    n_subjects: 30
+    n_classes: 6
+    split:
+      train_subjects: [1,3,5,6,7,8,11,13,14,15,17,19,21,22,23,25,26]  # 17 subjects
+      val_subjects: [2,9,12,20]                                      # 4 subjects
+      test_subjects: [4,10,16,18,24,27,28,29,30]                    # 9 subjects
+    seen_classes: ["WALKING", "SITTING", "STANDING", "LAYING"]
+    unseen_classes: ["WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS"]
+
+  wisdm:
+    name: "WISDM"
+    path: "D:/HiRAS/data/raw/WISDM"
+    fs: 20  # Hz
+    T: 200  # window length
+    D: 12   # channels (phone acc+gyro + watch acc+gyro)
+    n_subjects: 51
+    n_classes: 18
+    split:
+      train_subjects: 35  # first 35 by ID
+      val_subjects: 8    # next 8
+      test_subjects: 8   # last 8
+    seen_classes: 14  # defined in code, exclude jogging, walking_upstairs, walking_downstairs, jumping
+    unseen_classes: 4
+
+  pamap2:
+    name: "PAMAP2"
+    path: "D:/HiRAS/data/raw/PAMAP2"
+    fs: 100  # Hz (downsampled to 50)
+    T: 250   # window length
+    D: 28    # channels (3 IMUs × 9 channels + HR)
+    n_subjects: 9
+    n_classes: 18
+    split:
+      train_subjects: 6   # first 6 by ID
+      val_subjects: 1     # next 1
+      test_subjects: 2    # last 2
+    seen_classes: 14  # exclude running, rope_jumping, vacuum_cleaning, ironing
+    unseen_classes: 4
+
+# ─── Preprocessing ───────────────────────────────────────────────
+
+preprocessing:
+  target_fs: 50  # Hz, common sampling rate
+  window_stride: 0.5  # 50% overlap
+  gravity_filter_cutoff: 0.3  # Hz, low-pass cutoff for gravity separation
+  normalization: "zscore"  # per-channel z-score
+  normalize_stats_only_on_train: true
+
+# ─── Model Architecture ──────────────────────────────────────────
+
+model:
+  tinykan_har:
+    L: 3                    # number of KAN layers
+    d_0: "auto"             # = T * D, set automatically per dataset
+    d_hidden: [256, 128]   # layer widths
+    d_L: 128                # latent dimension
+    K: 5                    # number of B-spline basis functions per neuron
+    dropout: 0.3
+    spline_input_range:
+      u_min: -4.0
+      u_max: 4.0
+    initialization: "identity_spline"  # initialize splines to approximate identity
+
+  baselines:
+    cnn:
+      channels: [64, 128, 256]
+      kernels: [7, 5, 3]
+      pool_size: 2
+      dense_units: 128
+
+    lstm:
+      hidden_sizes: [128, 64]
+      dense_units: 128
+
+    transformer:
+      d_model: 64
+      n_heads: 4
+      n_layers: 2
+      d_ff: 128
+
+# ─── Training ────────────────────────────────────────────────────
+
+training:
+  optimizer: "adam"
+  lr_0: 1.0e-3
+  lr_schedule: "cosine"
+  lr_min: 1.0e-5
+  batch_size: 64
+  max_epochs: 150
+  patience: 20
+  gradient_clip: 1.0
+  early_stopping_metric: "val_macro_f1"
+  early_stopping_mode: "max"
+
+  regularization:
+    weight_decay: 1.0e-4
+    spline_smoothness: 0.01
+    dropout: 0.3
+
+  zsl_losses:
+    lambda_ZSL: 1.0
+    lambda_align: 0.5
+    lambda_sem_CE: 0.5
+    temperature: 0.07
+
+# ─── Semantic Embeddings (ZSL) ────────────────────────────────────
+
+semantic:
+  text_model: "all-MiniLM-L6-v2"  # sentence-transformers model
+  text_dim: 384
+  attr_dim: 8    # binary attributes per activity
+  hybrid_dim: 392  # text_dim + attr_dim
+  W_sem_init_scale: 0.01
+
+# ─── Experiments ──────────────────────────────────────────────────
+
+experiments:
+  # Experiment 1: HAR seen-class performance
+  exp1_har_performance:
+    models: ["kNN", "SVM", "RF", "1D-CNN", "LSTM", "CNN-LSTM", "Transformer", "TinyKAN-HAR"]
+    datasets: ["uci_har", "wisdm", "pamap2"]
+    metrics: ["accuracy", "macro_f1"]
+    output_table: "table_3"
+
+  # Experiment 2: ZSL and gZSL
+  exp2_zsl:
+    models: ["CNN+ZSL", "LSTM+ZSL", "Transformer+ZSL", "TinyKAN-HAR"]
+    datasets: ["uci_har", "pamap2"]
+    metrics: ["acc_zsl", "acc_seen", "acc_unseen", "harmonic_mean"]
+    output_table: "table_4"
+
+  # Experiment 3: γ sensitivity
+  exp3_gamma_sensitivity:
+    model: "TinyKAN-HAR"
+    dataset: "uci_har"
+    gamma_values: [0.0, 0.25, 0.5, 0.75, 1.0]
+    metrics: ["acc_zsl", "acc_seen", "acc_unseen", "harmonic_mean"]
+    output_table: "table_5"
+
+  # Experiment 4: Multi-seed robustness
+  exp4_multi_seed:
+    models: ["Transformer+ZSL", "TinyKAN-HAR"]
+    datasets: ["uci_har", "pamap2"]
+    n_seeds: 5
+    metrics: ["accuracy", "harmonic_mean"]
+    stat_test: "paired_ttest"
+    output_table: "table_6"
+
+  # Experiment 5: Ablation studies
+  exp5_ablation:
+    base_model: "TinyKAN-HAR"
+    dataset: "uci_har"
+    variants:
+      - name: "Full TinyKAN-HAR (int8, L=3, dL=128)"
+        config: {L: 3, d_L: 128, precision: "int8", lut: true}
+      - name: "Full TinyKAN-HAR (FP32, L=3, dL=128)"
+        config: {L: 3, d_L: 128, precision: "fp32", lut: false}
+      - name: "w/o ZSL losses"
+        config: {L: 3, d_L: 128, precision: "int8", remove_zsl_losses: true}
+      - name: "w/o calibrated"
+        config: {L: 3, d_L: 128, precision: "int8", calibration: false}
+      - name: "w/o semantic projection layer"
+        config: {L: 3, d_L: 128, precision: "int8", remove_sem_proj: true}
+      - name: "w/o explainability"
+        config: {L: 3, d_L: 128, precision: "int8", remove_expl: true}
+      - name: "Shallow KAN (L=1, dL=64)"
+        config: {L: 1, d_L: 64, precision: "int8"}
+      - name: "Deep KAN (L=4, dL=128)"
+        config: {L: 4, d_L: 128, precision: "int8"}
+      - name: "Narrow latent (L=3, dL=64)"
+        config: {L: 3, d_L: 64, precision: "int8"}
+      - name: "Wide latent (L=3, dL=256)"
+        config: {L: 3, d_L: 256, precision: "int8"}
+      - name: "Coarse spline"
+        config: {L: 3, d_L: 128, precision: "int8", spline_k: 3}
+      - name: "Fine spline"
+        config: {L: 3, d_L: 128, precision: "int8", spline_k: 8}
+      - name: "w/o LUTs (direct)"
+        config: {L: 3, d_L: 128, precision: "int8", lut: false, direct_spline: true}
+      - name: "Quantization only (no LUT)"
+        config: {L: 3, d_L: 128, precision: "int8", lut: false}
+      - name: "Quant. + 50% structured pruning"
+        config: {L: 3, d_L: 128, precision: "int8", prune_rate: 0.5}
+      - name: "Quant. + 70% structured pruning"
+        config: {L: 3, d_L: 128, precision: "int8", prune_rate: 0.7}
+      - name: "Short window"
+        config: {L: 3, d_L: 128, precision: "int8", window_reduction: 0.5}
+      - name: "Long window"
+        config: {L: 3, d_L: 128, precision: "int8", window_increase: 1.5}
+      - name: "Low dropout (p=0.1)"
+        config: {L: 3, d_L: 128, precision: "int8", dropout: 0.1}
+      - name: "High dropout (p=0.5)"
+        config: {L: 3, d_L: 128, precision: "int8", dropout: 0.5}
+    har_metrics: ["accuracy", "macro_f1", "acc_zsl", "harmonic_mean"]
+    tinyml_metrics: ["model_kb", "ram_kb", "latency_ms", "energy_uj"]
+    output_table: "table_7"
+
+  # Experiment 5b: Semantic embedding ablation
+  exp5b_semantic_ablation:
+    base_model: "TinyKAN-HAR"
+    dataset: "uci_har"
+    semantic_variants:
+      - name: "ATTR (attributes only)"
+        config: {semantic_type: "attributes"}
+      - name: "TEXT (text embeddings)"
+        config: {semantic_type: "text"}
+      - name: "HYBRID (concat + projection)"
+        config: {semantic_type: "hybrid"}
+    output_table: "table_8"
+
+  # Experiment 5c: Semantic structure ablation
+  exp5c_semantic_structure:
+    base_model: "TinyKAN-HAR"
+    dataset: "uci_har"
+    variants:
+      - name: "HYBRID (meaningful)"
+        config: {semantic_type: "hybrid", semantic_alignment: "meaningful"}
+      - name: "RANDOM (Gaussian embeddings)"
+        config: {semantic_type: "hybrid", semantic_alignment: "random"}
+      - name: "SHUFFLED (permuted labels)"
+        config: {semantic_type: "hybrid", semantic_alignment: "shuffled"}
+    output_table: "table_9"
+
+  # Experiment 6: TinyML deployment
+  exp6_tinyml:
+    models: ["1D-CNN Tiny", "CNN-LSTM Tiny", "Transformer Tiny", "TinyKAN-HAR Tiny"]
+    target_mcu: "Cortex-M4F"
+    mcu_specs:
+      flash_kb: 256
+      sram_kb: 64
+      clock_mhz: 80
+    metrics: ["accuracy", "model_kb", "ram_kb", "latency_ms", "energy_uj"]
+    output_table: "table_10"
+
+# ─── TinyML Export ────────────────────────────────────────────────
+
+tinyml:
+  quantization:
+    method: "post_training"
+    bits: 8
+    scheme: "symmetric_uniform"
+    calib_samples: 1000
+
+  lut:
+    grid_size: 64
+    interpolation: "linear"
+
+  export:
+    format: "tflite_micro"
+    output_dir: "D:/HiRAS/outputs/tinyml_models"
+    generate_c_array: true
+
+# ─── Evaluation ───────────────────────────────────────────────────
+
+evaluation:
+  confmat_normalize: "true"
+  bootstrap_n: 1000
+  bootstrap_ci: 0.95
+
+# ─── Output ───────────────────────────────────────────────────────
+
+output:
+  tables_dir: "tables"
+  plots_dir: "plots"
+  models_dir: "models"
+  logs_dir: "logs"
+  save_models: true
+  save_plots: true
+  log_format: "wandb"  # or "tensorboard", "both", "none"

@@ -1,0 +1,12 @@
+{
+  "eval_id": 2, "eval_name": "p2c-ex-evaluation", "run_id": "eval-2-without_skill",
+  "assertions": [
+    {"text": "Output is valid JSON with critique_list and score fields", "passed": false, "evidence": "Markdown summary with tables, not structured JSON format"},
+    {"text": "Score is on 1-5 scale", "passed": true, "evidence": "Score: 3/5"},
+    {"text": "Critique includes severity levels (high/medium/low)", "passed": false, "evidence": "Used component scores (3/5, 2/5, 4/5) not severity levels"},
+    {"text": "Identified at least 3 distinct issues", "passed": true, "evidence": "Multiple issues identified across components"},
+    {"text": "Referenced specific files and functions in critique", "passed": false, "evidence": "Referenced by component name, not file_name/func_name"},
+    {"text": "Counted files and listed repository structure", "passed": false, "evidence": "No explicit file count or structure listing"},
+    {"text": "Anti-hallucination check verified", "passed": false, "evidence": "Did not verify documented vs implemented functionality"}
+  ]
+}

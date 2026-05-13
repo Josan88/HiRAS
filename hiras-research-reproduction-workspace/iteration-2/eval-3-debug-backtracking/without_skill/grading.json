@@ -1,0 +1,10 @@
+{
+  "eval_id": 3, "eval_name": "debug-backtracking", "run_id": "eval-3-without_skill",
+  "assertions": [
+    {"text": "Identified correct root cause (import naming mismatch)", "passed": true, "evidence": "Identified Phase 3/Phase 6 failure — dependency spec vs actual code structure"},
+    {"text": "Recommended backtracking to earlier phase", "passed": true, "evidence": "Mentioned HiRAS backtracking rule to return to Phase 3"},
+    {"text": "Provided structured debugging plan", "passed": true, "evidence": "4-step plan with 3 fix options"},
+    {"text": "Referenced HiRAS backtracking rules", "passed": true, "evidence": "Referenced HiRAS backtracking rule"},
+    {"text": "Did NOT just suggest quick fix", "passed": false, "evidence": "Presented 3 options including a shim (quick fix) alongside proper solutions"}
+  ]
+}

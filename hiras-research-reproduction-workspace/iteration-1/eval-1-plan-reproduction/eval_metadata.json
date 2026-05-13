@@ -1,0 +1,6 @@
+{
+  "eval_id": 1,
+  "eval_name": "plan-reproduction",
+  "prompt": "I have a paper.md file describing TinyKAN-HAR, an explainable Kolmogorov-Arnold Network for zero-shot human activity recognition on TinyML edge devices. The paper has these experiments: (1) HAR performance on seen classes across 3 datasets (UCI HAR, WISDM, PAMAP2) comparing against kNN, SVM, RF, 1D-CNN, LSTM, CNN-LSTM, Transformer; (2) Zero-shot and generalized zero-shot performance; (3) Robustness of calibration factor gamma; (4) Statistical significance across random seeds; (5) Ablation studies; (6) TinyML deployment metrics. I want to reproduce all experiments. Help me plan this using the HiRAS methodology — generate the plan.md, architecture.md, dependency.md, and config.yaml before writing any code.",
+  "assertions": []
+}

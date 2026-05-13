@@ -1,0 +1,47 @@
+{
+  "eval_id": 1,
+  "eval_name": "plan-reproduction",
+  "run_id": "eval-1-plan-reproduction-with_skill",
+  "assertions": [
+    {
+      "text": "Produced plan.md artifact",
+      "passed": true,
+      "evidence": "Agent saved plan.md (8.7 KB) covering 6 experiments with goals, datasets, protocols, metrics, and dependencies"
+    },
+    {
+      "text": "Produced architecture.md artifact",
+      "passed": true,
+      "evidence": "Agent saved architecture.md (8.9 KB) with directory layout, module responsibilities, data structures, entry points, and traceability matrix"
+    },
+    {
+      "text": "Produced dependency.md artifact",
+      "passed": true,
+      "evidence": "Agent saved dependency.md (11.7 KB) with package list, inter-file dependencies, class/function signatures, topological task ordering"
+    },
+    {
+      "text": "Produced config.yaml artifact",
+      "passed": true,
+      "evidence": "Agent saved config.yaml (12.2 KB) with all hyperparameters extracted from paper, UNKNOWN/TODO flags for unspecified values"
+    },
+    {
+      "text": "Plan covers all 6 experiments from the paper",
+      "passed": true,
+      "evidence": "Plan explicitly covers: (1) HAR seen classes Table 3, (2) ZSL/gZSL Table 4, (3) gamma robustness Table 5, (4) statistical significance Table 6, (5) ablation Tables 7-9, (6) TinyML deployment Table 10"
+    },
+    {
+      "text": "Config flags values not from paper as UNKNOWN/TODO",
+      "passed": true,
+      "evidence": "Config explicitly flags: text embedding model (UNKNOWN), attribute embedding dimension (not specified), num B-spline knots K (inferred), batch size (tune on validation), exact epochs (100-200 per paper)"
+    },
+    {
+      "text": "Did NOT write implementation code",
+      "passed": true,
+      "evidence": "Agent confirmed: 'No code was written — only planning artifacts per the HiRAS phased workflow through Phase 4'"
+    },
+    {
+      "text": "Followed phased workflow (Phase 0-4 in order)",
+      "passed": true,
+      "evidence": "Agent produced artifacts in order: intake summary, plan.md, architecture.md, dependency.md, config.yaml — matching HiRAS phases 0-4"
+    }
+  ]
+}

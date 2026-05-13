@@ -1,0 +1,360 @@
+# Phase 4: Configuration - TinyKAN-HAR Reproduction
+# All values are EXPLICITLY STATED in the paper unless marked TODO/UNKNOWN
+
+# =============================================================================
+# DATASET CONFIGURATIONS
+# =============================================================================
+
+datasets:
+  uci_har:
+    name: "UCI HAR"
+    num_subjects: 30
+    num_activities: 6
+    sampling_rate_hz: 50
+    window_length_samples: 128        # T = 128 samples (2.56s at 50Hz)
+    window_stride_samples: 64          # 50% overlap (stride = T/2)
+    num_channels: 6                   # 3-axis acc + 3-axis gyro
+    subjects_train: 21
+    subjects_val: 4
+    subjects_test: 9
+    seen_classes: ["WALKING", "SITTING", "STANDING", "LAYING"]
+    unseen_classes: ["WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS"]
+    url: "https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones"
+
+  wisdm:
+    name: "WISDM"
+    num_subjects: 51
+    num_activities: 18
+    sampling_rate_hz: 20
+    window_length_samples: 200         # T = 200 samples (10s at 20Hz)
+    window_stride_samples: 100        # 50% overlap
+    num_channels: 12                   # phone acc+gyro + watch acc+gyro (4×3)
+    subjects_train: 35
+    subjects_val: 8
+    subjects_test: 8
+    seen_classes: [
+      "walking", "sitting", "standing", "walking_upstairs",
+      "walking_downstairs", "stairs", "lying",
+      "kitchen", "stairs_up", "stairs_down",
+      "operating_walkie_talkie", "typing", "brushing_teeth", "using_stairmaster"
+    ]
+    unseen_classes: ["jogging", "walking_upstairs", "walking_downstairs", "jumping"]
+    url: "https://archive.ics.uci.edu/dataset/507/wisdm+smartphone+and+smartwatch+activity+and+biometrics+dataset"
+
+  pamap2:
+    name: "PAMAP2"
+    num_subjects: 9
+    num_activities: 18
+    sampling_rate_hz_original: 100
+    sampling_rate_hz_target: 50        # downsampled to 50Hz
+    window_length_samples: 250        # T = 250 samples (5s at 50Hz)
+    window_stride_samples: 125        # 50% overlap
+    num_channels: 28                  # 3 IMUs × (acc+gyro+mag) = 27 + 1 heart rate
+    subjects_train: 6
+    subjects_val: 1
+    subjects_test: 2
+    seen_classes: [
+      "lying", "sitting", "standing", "walking",
+      "running", "ascending_stairs", "descending_stairs", "Nordic_walking",
+      "playing_soccer", "rope_jumping"
+    ]
+    unseen_classes: ["running", "rope_jumping", "vacuum_cleaning", "ironing"]
+    url: "https://archive.ics.uci.edu/dataset/231/pamap2+physical+activity+monitoring"
+
+# =============================================================================
+# PREPROCESSING CONFIGURATION
+# =============================================================================
+
+preprocessing:
+  target_sampling_rate_hz: 50
+  gravity_separation:
+    low_pass_cutoff_hz: 0.3            # paper states 0.3-0.5 Hz
+    filter_type: "FIR"
+  normalization:
+    method: "z-score"
+    per_channel: true
+    compute_on_train_only: true
+  missing_values:
+    interpolation_method: "linear"
+    max_gap_threshold_samples: 10      # discard if gap > 10 samples
+  gravity_separation_cutoff: 0.3       # Hz
+
+# =============================================================================
+# MODEL ARCHITECTURE - KAN
+# =============================================================================
+
+kan:
+  num_layers: 3                        # L = 3 (best trade-off per paper, Section 5.6)
+  latent_dim: 128                     # d_L = 128 (best trade-off per paper)
+  num_knots: 5                        # K = 5 cubic B-spline knots (UNKNOWN - inferred from model size)
+  spline_order: 3                     # k = 3 (cubic splines)
+  dropout: 0.1                         # p_drop = 0.1
+
+  # Layer dimensions per dataset (input → hidden → ... → latent)
+  layer_dims:
+    uci_har: [768, 256, 128]           # input: 128×6 = 768
+    wisdm: [2400, 512, 128]            # input: 200×12 = 2400
+    pamap2: [7000, 512, 128]           # input: 250×28 = 7000
+
+# =============================================================================
+# CLASSIFICATION HEAD
+# =============================================================================
+
+classifier:
+  hidden_dim: 128                     # same as KAN latent dim
+
+# =============================================================================
+# ZERO-SHOT LEARNING MODULE
+# =============================================================================
+
+zsl:
+  semantic_embedding_type: "hybrid"   # hybrid (attributes + text)
+
+  # Attribute-based (binary attributes) - UNKNOWN: paper mentions but does not list
+  # Will be inferred from activity semantics
+  attribute_dim: 12                   # TODO: verify, paper does not specify exact number
+
+  # Text embedding - UNKNOWN: paper says "pretrained language model" but does not specify which
+  # Will use a common choice (e.g., sentence-transformers/all-MiniLM-L6-v2)
+  text_embedding_model: "UNKNOWN"     # TODO: specify actual model name
+  text_embedding_dim: 384             # TODO: depends on text_embedding_model
+
+  # Total semantic dim = attribute_dim + text_embedding_dim (hybrid)
+  projection_dim: 128                  # W_sem ∈ R^{m × d_L}
+
+  # Loss weights
+  lambda_align: 1.0                    # λ_align in Eq (36)
+  lambda_sem_ce: 1.0                  # λ_sem-CE in Eq (36)
+  lambda_zsl: 1.0                      # λ_ZSL in Eq (19)
+
+  # Temperature for semantic softmax
+  temperature: 1.0                     # τ in Eq (34)
+
+  # Calibration factor (selected on validation)
+  calibration_gamma: 0.5               # γ in Eq (40), selected on val for gZSL
+
+# =============================================================================
+# TRAINING HYPERPARAMETERS
+# =============================================================================
+
+training:
+  # Optimizer
+  optimizer: "Adam"
+  initial_learning_rate: 0.001         # η_0 in range [10^-4, 10^-3]
+  weight_decay: 0.0001                 # λ_ℓ2 weight decay
+
+  # Learning rate schedule
+  lr_schedule: "cosine"                # cosine annealing (paper mentions)
+  # TODO: exact warmup/peak details not specified
+
+  # Batch size - NOT SPECIFIED per dataset, tune on validation
+  batch_size: 64                      # TODO: may need tuning {32, 64, 128}
+
+  # Epochs - NOT SPECIFIED exactly
+  max_epochs: 150                      # TODO: paper says "100-200" but exact number unclear
+  early_stopping:
+    patience: 20                       # E_patience = 20 epochs
+    monitor_metric: "macro_f1"         # monitor validation macro-F1
+
+  # Regularization
+  lambda_lin: 0.001                    # λ_lin for weight decay in Eq (20)
+  lambda_smooth: 0.01                 # λ_smooth for spline smoothness in Eq (21)
+
+# =============================================================================
+# ABLATION STUDY CONFIGURATIONS
+# =============================================================================
+
+ablations:
+  # KAN depth variants
+  kan_depths: [1, 3, 4]
+  kan_latent_dims: [64, 128, 256]
+
+  # Spline resolution
+  spline_knots_coarse: 3               # fewer knots
+  spline_knots_fine: 8                 # more knots
+
+  # Pruning rates
+  pruning_rates: [0.0, 0.5, 0.7]
+
+  # Window length variants
+  window_lengths:
+    short: 64                         # T reduced (UCI HAR)
+    long: 256                         # T increased (UCI HAR)
+
+  # Dropout rates
+  dropout_rates: [0.1, 0.3, 0.5]
+
+  # Gamma sweep values
+  gamma_values: [0.0, 0.25, 0.5, 0.75, 1.0]
+
+# =============================================================================
+# SEMANTIC EMBEDDING ABLATIONS
+# =============================================================================
+
+semantic_ablation:
+  types: ["ATTR", "TEXT", "HYBRID"]
+  random_seed_variants: ["HYBRID", "RANDOM", "SHUFFLED"]
+
+# =============================================================================
+# TINYML OPTIMIZATION
+# =============================================================================
+
+tinyml:
+  target_mcu: "Cortex-M4F"
+  mcu_specs:
+    flash_kb: 256
+    sram_kb: 64
+    clock_mhz: 80
+
+  quantization:
+    weight_bits: 8                    # int8 quantization
+    activation_bits: 8                 # int8 activation quantization
+    method: "symmetric_uniform"        # Eq (42)
+
+  lut:
+    num_points: 256                    # LUT grid size per spline
+    interpolation: "linear"             # linear interpolation between LUT entries
+
+  model_variants:
+    baseline:                          # Full TinyKAN-HAR FP32
+      precision: "FP32"
+      expected_flash_kb: 580
+      expected_ram_kb: 92
+      expected_latency_ms: 13.5
+      expected_energy_uj: 1030
+
+    int8_quantized:                    # Full TinyKAN-HAR int8
+      precision: "int8"
+      expected_flash_kb: 145
+      expected_ram_kb: 26
+      expected_latency_ms: 4.1
+      expected_energy_uj: 320
+
+    shallow_kan:                       # L=1, d_L=64
+      precision: "int8"
+      expected_flash_kb: 110
+      expected_ram_kb: 20
+      expected_latency_ms: 3.2
+      expected_energy_uj: 250
+
+    deep_kan:                          # L=4, d_L=128
+      precision: "int8"
+      expected_flash_kb: 190
+      expected_ram_kb: 34
+      expected_latency_ms: 5.6
+      expected_energy_uj: 410
+
+    quant_pruned_50:                   # int8 + 50% structured pruning
+      precision: "int8"
+      pruning_rate: 0.5
+      expected_flash_kb: 110
+      expected_ram_kb: 20
+      expected_latency_ms: 3.0
+      expected_energy_uj: 230
+
+    quant_pruned_70:                   # int8 + 70% structured pruning
+      precision: "int8"
+      pruning_rate: 0.7
+      expected_flash_kb: 90
+      expected_ram_kb: 22
+      expected_latency_ms: 2.4
+      expected_energy_uj: 180
+
+# =============================================================================
+# BASELINES CONFIGURATION
+# =============================================================================
+
+baselines:
+  knn:
+    k_values: [3, 5, 7, 9]             # select k on validation
+    metric: "euclidean"
+
+  svm:
+    kernel: "rbf"                     # paper mentions RBF kernel
+    C_values: [0.1, 1.0, 10.0]        # select C on validation
+    gamma_values: ["scale", "auto"]
+
+  random_forest:
+    n_estimators: 100
+    max_depth: null                   # no limit
+    min_samples_split: 2
+
+  cnn1d:
+    channels: [64, 128]
+    kernel_size: 3
+    pooling_size: 2
+    dropout: 0.2
+
+  lstm:
+    hidden_size: 128
+    num_layers: 2
+    bidirectional: false
+    dropout: 0.2
+
+  cnn_lstm:
+    cnn_channels: [64, 128]
+    lstm_hidden: 128
+    lstm_layers: 1
+
+  transformer:
+    embed_dim: 128
+    num_heads: 4
+    num_layers: 2
+    ff_dim: 256
+    dropout: 0.1
+
+# =============================================================================
+# EVALUATION SETTINGS
+# =============================================================================
+
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1_macro
+    - f1_micro
+
+  zsl_metrics:
+    - acc_zsl               # pure ZSL accuracy on unseen
+    - acc_seen             # gZSL seen accuracy
+    - acc_unseen           # gZSL unseen accuracy
+    - harmonic_mean        # H = 2*acc_seen*acc_unseen / (acc_seen + acc_unseen)
+
+  statistical_test:
+    num_seeds: 5
+    test_type: "paired_two_sided_ttest"
+    alpha: 0.01             # significance level
+
+  random_seeds: [42, 43, 44, 45, 46]
+
+# =============================================================================
+# PATHS
+# =============================================================================
+
+paths:
+  data_dir: "./data"
+  raw_data_dir: "./data/raw"
+  processed_data_dir: "./data/processed"
+  checkpoint_dir: "./checkpoints"
+  results_dir: "./results"
+  cache_dir: "./cache"
+
+# =============================================================================
+# DEVICE SETTINGS
+# =============================================================================
+
+device:
+  cuda_if_available: true
+  num_workers: 4
+  pin_memory: true
+
+# =============================================================================
+# REPRODUCIBILITY
+# =============================================================================
+
+reproducibility:
+  numpy_seed: 42
+  torch_seed: 42
+  python_hash_seed: 0
+  deterministic: true

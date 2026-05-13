@@ -1,0 +1,38 @@
+{
+  "skill_name": "hiras-research-reproduction",
+  "iteration": 2,
+  "configurations": [
+    {
+      "name": "with_skill",
+      "evals": [
+        {"eval_name": "plan-reproduction", "pass_rate": 1.0, "passed": 8, "total": 8},
+        {"eval_name": "p2c-ex-evaluation", "pass_rate": 1.0, "passed": 7, "total": 7},
+        {"eval_name": "debug-backtracking", "pass_rate": 1.0, "passed": 5, "total": 5},
+        {"eval_name": "paperbench-planning", "pass_rate": 1.0, "passed": 7, "total": 7},
+        {"eval_name": "rubric-mapping", "pass_rate": 1.0, "passed": 5, "total": 5},
+        {"eval_name": "paperbench-backtracking", "pass_rate": 1.0, "passed": 5, "total": 5}
+      ],
+      "mean_pass_rate": 1.0,
+      "total_passed": 37,
+      "total_assertions": 37
+    },
+    {
+      "name": "without_skill",
+      "evals": [
+        {"eval_name": "plan-reproduction", "pass_rate": 0.875, "passed": 7, "total": 8},
+        {"eval_name": "p2c-ex-evaluation", "pass_rate": 0.286, "passed": 2, "total": 7},
+        {"eval_name": "debug-backtracking", "pass_rate": 0.8, "passed": 4, "total": 5},
+        {"eval_name": "paperbench-planning", "pass_rate": 0.857, "passed": 6, "total": 7},
+        {"eval_name": "rubric-mapping", "pass_rate": 0.6, "passed": 3, "total": 5},
+        {"eval_name": "paperbench-backtracking", "pass_rate": 1.0, "passed": 5, "total": 5}
+      ],
+      "mean_pass_rate": 0.736,
+      "total_passed": 27,
+      "total_assertions": 37
+    }
+  ],
+  "delta": {
+    "pass_rate": 0.264,
+    "with_skill_advantage": "37/37 assertions passed (100%) vs 27/37 (73.6%) without skill"
+  }
+}

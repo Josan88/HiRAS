@@ -1,0 +1,453 @@
+# Config: TinyKAN-HAR Reproduction — All Hyperparameters
+# Values marked PAPER specify exact value stated in paper
+# Values marked TODO specify values NOT stated in paper, to be inferred
+
+project:
+  name: TinyKAN-HAR
+  paper: "Explainable Kolmogorov-Arnold Networks for Zero-Shot HAR on TinyML"
+  seed: 42  # PAPER states "fix a global random seed"
+
+# =============================================================================
+# DATASETS
+# =============================================================================
+datasets:
+  uci_har:
+    name: UCI Human Activity Recognition Using Smartphones
+    url: "https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones"
+    num_subjects: 30
+    num_activities: 6
+    activities:
+      - WALKING
+      - WALKING_UPSTAIRS
+      - WALKING_DOWNSTAIRS
+      - SITTING
+      - STANDING
+      - LAYING
+    fs: 50  # Hz
+    channels: 6  # triaxial accelerometer + triaxial gyroscope (phone)
+    window_samples: 128  # = 2.56s at 50Hz
+    window_stride: 64   # 50% overlap
+    subject_split:
+      train: 21
+      val: 4
+      test: 9
+    zsl:
+      seen: [WALKING, SITTING, STANDING, LAYING]
+      unseen: [WALKING_UPSTAIRS, WALKING_DOWNSTAIRS]
+    preprocessing:
+      gravity_separation: true
+      gravity_cutoff: 0.3  # Hz
+      normalization: z_score  # per-channel, computed on training set only
+
+  wisdm:
+    name: WISDM Smartphone and Smartwatch Activity and Biometrics
+    url: "https://archive.ics.uci.edu/dataset/507/wisdm+smartphone+and+smartwatch+activity+and+biometrics+dataset"
+    num_subjects: 51
+    num_activities: 18
+    fs: 20  # Hz
+    channels: 12  # phone Acc+Gyro (6) + watch Acc+Gyro (6)
+    window_samples: 200  # = 10s at 20Hz
+    window_stride: 100    # 50% overlap
+    subject_split:
+      train: 35
+      val: 8
+      test: 8
+    zsl:
+      seen: 14  # all except below
+      unseen:
+        - jogging
+        - walking_upstairs
+        - walking_downstairs
+        - jumping
+    preprocessing:
+      resample_to_50hz: true
+      gravity_separation: true
+      gravity_cutoff: 0.3
+      normalization: z_score
+
+  pamap2:
+    name: PAMAP2 Physical Activity Monitoring
+    url: "https://archive.ics.uci.edu/dataset/231/pamap2+physical+activity+monitoring"
+    num_subjects: 9
+    num_activities: 18
+    fs_original: 100  # Hz
+    fs_target: 50     # Hz (downsampled)
+    channels: 28      # 3 IMUs × (accel+gyro+magnet=9) + heart-rate (1) = 28
+    window_samples: 250  # = 5s at 50Hz
+    window_stride: 125    # 50% overlap
+    subject_split:
+      train: 6
+      val: 1
+      test: 2
+    zsl:
+      seen: 14  # all except running, rope_jumping, vacuum_cleaning, ironing
+      unseen:
+        - running
+        - rope_jumping
+        - vacuum_cleaning
+        - ironing
+    preprocessing:
+      resample_to_50hz: true
+      missing_value_interpolation: true
+      heart_rate_handling: interpolate_to_50hz
+      gravity_separation: true
+      gravity_cutoff: 0.3
+      normalization: z_score
+
+# =============================================================================
+# KAN ARCHITECTURE
+# =============================================================================
+kan:
+  num_layers: 3           # PAPER: "L = 3" selected as optimal trade-off
+  latent_dim: 128         # PAPER: "d_L = 128" selected as optimal trade-off
+  num_knots: 5            # TODO: not explicitly stated; infer from model size
+  spline_degree: 3        # PAPER: "cubic B-splines"
+  dropout: 0.3            # PAPER: used during training (specific p not stated; 0.3 typical)
+  init_range: [-1, 1]     # PAPER: spline initialized to approximate identity
+  layer_dims:
+    uci_har:    [768, 256, 128]   # 128×6=768 input dim
+    wisdm:     [2400, 512, 128]   # 200×12=2400 input dim
+    pamap2:    [7000, 512, 128]   # 250×28=7000 input dim
+
+# =============================================================================
+# TRAINING — OPTIMIZER & SCHEDULE
+# =============================================================================
+training:
+  optimizer: adam        # PAPER: "Adam"
+  initial_lr: 0.001      # PAPER: "10^-4 to 10^-3" range, 10^-3 default
+  weight_decay: 0.0001   # PAPER: "L2 weight decay λ_l2"
+  batch_size: 64         # TODO: "Nb ∈ {32, 64, 128}" — 64 chosen
+  max_epochs: 150         # TODO: "100-200 epochs" — conservative 150
+  early_stopping:
+    patience: 20         # TODO: not explicitly stated; standard value
+    min_delta: 0.001     # TODO: minimal improvement threshold
+  scheduler:
+    type: cosine         # PAPER: "step schedule or cosine annealing"
+    # Cosine annealing params
+    T_max: 150           # equals max_epochs
+    eta_min: 0.00001     # TODO: minimum LR at end of annealing
+
+# =============================================================================
+# REGULARIZATION
+# =============================================================================
+regularization:
+  lambda_lin: 0.0001     # PAPER: weight decay λ_l2 on linear weights
+  lambda_smooth: 0.01    # PAPER: spline smoothness penalty coefficient
+  dropout_rate: 0.3       # PAPER: dropout probability during training
+
+# =============================================================================
+# ZERO-SHOT LEARNING
+# =============================================================================
+zsl:
+  semantic_dim: 64       # TODO: not explicitly stated; standard embedding dim
+  embedding_type: hybrid  # PAPER: best performing is HYBRID (attr + text concat)
+  temperature: 0.1       # PAPER: "τ > 0" temperature in softmax over compatibility
+  lambda_zsl: 0.5        # PAPER: λ_ZSL balancing task loss and ZSL loss
+  lambda_align: 0.5      # PAPER: λ_align for alignment loss
+  lambda_sem_ce: 0.5     # PAPER: λ_sem-CE for semantic cross-entropy
+  calibration:
+    gamma_search: [0.0, 0.25, 0.5, 0.75, 1.0]  # PAPER: sweep range
+    gamma_star: 0.5     # PAPER: "γ* = 0.5 selected on validation set"
+  text_embedding_model: sentence-transformers/all-MiniLM-L6-v2  # TODO: not stated; common choice
+  attribute_definitions:  # TODO: manually defined attributes
+    WALKING: [1, 0, 1, 0, 0, 1]   # locomotion, not_upper_body, dynamic, low_intensity, outdoor, legs
+    WALKING_UPSTAIRS: [1, 0, 1, 0, 1, 1]
+    WALKING_DOWNSTAIRS: [1, 0, 1, 0, 1, 1]
+    SITTING: [0, 1, 0, 0, 0, 0]
+    STANDING: [0, 1, 0, 0, 0, 0]
+    LAYING: [0, 1, 0, 1, 0, 0]
+    jogging: [1, 0, 1, 1, 0, 1]
+    running: [1, 0, 1, 1, 0, 1]
+    # ... extend as needed per dataset
+
+# =============================================================================
+# ABLATION VARIANTS
+# =============================================================================
+ablations:
+  - name: full_tinykan_int8
+    description: "Full TinyKAN-HAR (int8, L=3, dL=128)"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    quantization: int8
+    lut: true
+
+  - name: full_tinykan_fp32
+    description: "Full TinyKAN-HAR (FP32, L=3, dL=128)"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    quantization: fp32
+    lut: true
+
+  - name: without_zsl_losses
+    description: "Remove ZSL-specific losses; keep semantic compatibility at test time"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    zsl:
+      lambda_zsl: 0.0
+
+  - name: without_calibration
+    description: "Disable score calibration (gamma=0)"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    zsl:
+      calibration_gamma: 0.0
+
+  - name: without_semantic_projection
+    description: "Remove learned W_sem; use simpler mapping"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    zsl:
+      use_projection: false
+
+  - name: without_explainability
+    description: "Disable explainability regularizer"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    regularization:
+      lambda_smooth: 0.0
+
+  - name: shallow_kan
+    description: "L=1, dL=64"
+    kan:
+      num_layers: 1
+      latent_dim: 64
+
+  - name: deep_kan
+    description: "L=4, dL=128"
+    kan:
+      num_layers: 4
+      latent_dim: 128
+
+  - name: narrow_latent
+    description: "L=3, dL=64"
+    kan:
+      num_layers: 3
+      latent_dim: 64
+
+  - name: wide_latent
+    description: "L=3, dL=256"
+    kan:
+      num_layers: 3
+      latent_dim: 256
+
+  - name: coarse_spline
+    description: "Fewer spline knots"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+      num_knots: 3
+
+  - name: fine_spline
+    description: "More spline knots"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+      num_knots: 7
+
+  - name: without_luts
+    description: "Direct spline evaluation (no LUTs)"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    lut: false
+
+  - name: quantization_only
+    description: "int8 quantization, no LUTs"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    quantization: int8
+    lut: false
+
+  - name: quant_50_pruning
+    description: "int8 + 50% structured pruning"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    quantization: int8
+    lut: true
+    pruning_rate: 0.5
+
+  - name: quant_70_pruning
+    description: "int8 + 70% structured pruning"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    quantization: int8
+    lut: true
+    pruning_rate: 0.7
+
+  - name: short_window
+    description: "Reduced temporal window length T"
+    data:
+      window_reduction_factor: 0.75
+
+  - name: long_window
+    description: "Increased temporal window length T"
+    data:
+      window_increase_factor: 1.25
+
+  - name: low_dropout
+    description: "p_drop=0.1"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    regularization:
+      dropout_rate: 0.1
+
+  - name: high_dropout
+    description: "p_drop=0.5"
+    kan:
+      num_layers: 3
+      latent_dim: 128
+    regularization:
+      dropout_rate: 0.5
+
+  - name: semantic_attr_only
+    description: "Attributes only (no text embeddings)"
+    zsl:
+      embedding_type: attr
+
+  - name: semantic_text_only
+    description: "Text embeddings only (no attributes)"
+    zsl:
+      embedding_type: text
+
+  - name: semantic_hybrid
+    description: "Hybrid (concat of attr + text)"
+    zsl:
+      embedding_type: hybrid
+
+  - name: semantic_random
+    description: "Random Gaussian embeddings (ablation)"
+    zsl:
+      embedding_type: random
+
+  - name: semantic_shuffled
+    description: "Shuffled semantic labels (ablation)"
+    zsl:
+      embedding_type: shuffled
+
+# =============================================================================
+# TINYML DEPLOYMENT
+# =============================================================================
+tinyml:
+  target_device: Cortex-M4F
+  clock_freq_mhz: 80
+  flash_kb: 256
+  sram_kb: 64
+  quantization: int8
+  lut_grid_size: 256    # TODO: not explicitly stated; standard for int8 LUT
+  structured_pruning:
+    rates: [0.0, 0.5, 0.7]
+  metrics:
+    flash_model: "model size in kB = (bit_width/8) * P_total + M_spline_lut"
+    ram_model: "peak activations during layer-by-layer forward pass"
+    latency_model: "FLOPs / (clock_freq_mhz * CPI)"  # CPI = cycles per instruction
+    energy_model: "latency_ms * power_mw"  # power_mw estimated from Cortex-M4F
+
+# =============================================================================
+# BASELINES
+# =============================================================================
+baselines:
+  knn:
+    k_range: [3, 5, 7, 9, 11]
+    metric: euclidean
+    weight: distance
+
+  svm:
+    kernel: rbf
+    C_range: [0.1, 1, 10, 100]
+    gamma_range: [scale, auto]
+
+  random_forest:
+    n_estimators_range: [50, 100, 200]
+    max_features: sqrt
+
+  cnn1d:
+    channels: [32, 64, 128]
+    kernel_size: 3
+    pool_size: 2
+    fc_hidden: 128
+    activation: relu
+    dropout: 0.3
+
+  lstm:
+    hidden_size: 128
+    num_layers: 2
+    bidirectional: false
+    attention: false
+
+  cnn_lstm:
+    cnn_channels: [32, 64]
+    lstm_hidden: 128
+    lstm_layers: 1
+    bidirectional: true
+
+  transformer:
+    d_model: 128
+    num_heads: 4
+    num_layers: 2
+    dim_feedforward: 512
+    dropout: 0.1
+
+# =============================================================================
+# EVALUATION
+# =============================================================================
+evaluation:
+  metrics:
+    classification:
+      - accuracy
+      - precision_macro
+      - precision_micro
+      - recall_macro
+      - recall_micro
+      - f1_macro
+      - f1_micro
+
+    zsl:
+      - acc_zsl        # pure zero-shot accuracy on unseen classes
+      - acc_seen       # accuracy on seen classes (gZSL)
+      - acc_unseen     # accuracy on unseen classes (gZSL)
+      - harmonic_mean  # harmonic mean of acc_seen and acc_unseen
+
+  statistical_tests:
+    num_seeds: 5         # PAPER: "five runs with identical hyperparameters"
+    test: paired_ttest
+    alpha: 0.01          # PAPER: "p-value below 0.01"
+
+  random_seeds: [42, 123, 456, 789, 1024]  # 5 distinct seeds for multi-run
+
+# =============================================================================
+# EXPLAINABILITY
+# =============================================================================
+explainability:
+  gradient:
+    method: gradient_x_input
+    normalize: true
+
+  shap:
+    n_samples: 1000      # TODO: not stated; sampling-based estimator
+    background_size: 100
+
+  visualization:
+    spline_samples: 100  # points per spline curve
+    heatmap_dpi: 150
+    output_format: png
+
+# =============================================================================
+# HARDWARE TARGET (for TinyML metrics estimation)
+# =============================================================================
+hardware:
+  cortex_m4f:
+    clock_mhz: 80
+    flash_kb: 256
+    sram_kb: 64
+    power_mw: 50  # TODO: estimated active power for Cortex-M4F @80MHz
+    mac_per_cycle: 1  # assuming simple integer MAC
