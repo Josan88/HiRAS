@@ -4,6 +4,15 @@ Hierarchical Research Agent System (HiRAS)
 
 This repository contains the implementation of the Hierarchical Research Agent System (HiRAS), a multi-agent framework for automated research paper replication.
 
+## HiRAS Skill
+
+This repository includes a HiRAS agent skill for structured research paper reproduction:
+
+- Packaged skill: `hiras-research-reproduction.skill`
+- Source definition: `hiras-research-reproduction/SKILL.md`
+
+Use this skill when reproducing experiments from research papers, generating code from papers, evaluating paper-to-code repositories, or debugging failed reproductions. The skill follows the HiRAS workflow: intake, planning, architecture design, dependency modelling, configuration extraction, implementation, execution, evaluation, and backtracking when failures occur.
+
 ## Preparation
 
 ### Data Preparation
