@@ -1,5 +1,7 @@
 # Hierarchical Research Agent System (HiRAS)
 
+[![skills.sh](https://skills.sh/b/Josan88/HiRAS)](https://skills.sh/Josan88/HiRAS)
+
 Hierarchical Research Agent System (HiRAS)
 
 This repository contains the implementation of the Hierarchical Research Agent System (HiRAS), a multi-agent framework for automated research paper replication.
