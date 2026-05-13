@@ -1,0 +1,23 @@
+{
+  "skill_name": "hiras-research-reproduction",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have a paper.md file describing a new ML method for few-shot image classification. The paper has 3 experiments: (1) comparison on miniImageNet, (2) cross-domain transfer to CUB-200, (3) ablation on the attention mechanism. I want to reproduce all three experiments. Help me plan this using the HiRAS methodology — generate the plan.md, architecture.md, dependency.md, and config.yaml before writing any code.",
+      "expected_output": "The skill should produce a structured reproduction plan covering all 3 experiments, an architecture mapping experiments to modules, a dependency analysis with topological ordering, and a config.yaml extracting paper-specified hyperparameters. Each phase should be validated before proceeding.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I generated a paper-to-code repository from a NeurIPS 2024 paper on graph neural networks. The repo has 12 Python files and a README. I want to evaluate its quality using the P2C-Ex reference-free protocol. The paper is in paper.md. Please score the repository and provide structured critique.",
+      "expected_output": "The skill should enter evaluation mode, read the paper and repository completely, count files, list the structure, score on 1-5 scale, and produce a JSON critique with file_name, func_name, severity_level, and critique fields.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I'm trying to reproduce a paper on transformer-based time series forecasting. The code was generated but execution fails with ImportError: cannot import name 'TemporalAttention' from 'models.attention'. The file models/attention.py exists but the class isn't defined there. How should I debug this using the HiRAS approach?",
+      "expected_output": "The skill should identify this as a Phase 6 (code) / Phase 5 (analysis) issue, not just a quick fix. It should recommend: (1) checking the analysis file for attention.py to see if TemporalAttention was supposed to be there, (2) checking architecture.md for the interface spec, (3) fixing the root cause, (4) re-executing. The response should emphasize backtracking to the analysis phase, not just patching the import.",
+      "files": []
+    }
+  ]
+}
