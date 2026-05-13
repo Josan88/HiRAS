@@ -1,6 +1,0 @@
-{
-  "eval_id": 3,
-  "eval_name": "debug-backtracking",
-  "prompt": "I'm trying to reproduce the TinyKAN-HAR paper (explainable KAN for zero-shot HAR on TinyML). The code was generated but execution fails with: ModuleNotFoundError: No module named 'kan_layers'. The file models/kan.py exists but it defines KANLayer instead of the expected module name. How should I debug this using the HiRAS approach?",
-  "assertions": []
-}

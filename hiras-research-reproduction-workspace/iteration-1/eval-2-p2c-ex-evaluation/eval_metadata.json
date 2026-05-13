@@ -1,6 +1,0 @@
-{
-  "eval_id": 2,
-  "eval_name": "p2c-ex-evaluation",
-  "prompt": "I generated a paper-to-code repository from the TinyKAN-HAR paper (explainable KAN for zero-shot HAR on TinyML). The repo has 15 Python files, a config.yaml, and a README. I want to evaluate its quality using the P2C-Ex reference-free protocol. The paper is in paper.md. Please score the repository and provide structured critique in JSON format.",
-  "assertions": []
-}
